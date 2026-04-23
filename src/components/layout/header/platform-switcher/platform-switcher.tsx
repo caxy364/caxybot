@@ -50,12 +50,8 @@ const PlatformSwitcher = observer(() => {
     }
     return (
         <UIPlatformSwitcher
-            bottomLinkLabel={localize("Looking for CFDs? Go to Trader's Hub")}
             buttonProps={{
                 icon: platformsConfig[1].buttonIcon,
-            }}
-            bottomLinkProps={{
-                href: final_url,
             }}
         >
             {platformsConfig.map(({ active, description, href, icon }) => (
