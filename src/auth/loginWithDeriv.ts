@@ -1,8 +1,8 @@
 import { AUTH_CONFIG } from './auth.config';
 
 /**
- * Build the Deriv OAuth authorize URL using the hard-coded config.
- * No origin / href / localhost is read from the runtime.
+ * Build the Deriv OAuth authorize URL using the env-driven config in
+ * auth.config.ts. No origin / href / localhost is read from the runtime.
  */
 export const buildDerivOAuthUrl = (overrides?: { language?: string; state?: string }) => {
     const params = new URLSearchParams({

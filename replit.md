@@ -90,3 +90,15 @@ Preferred communication style: Simple, everyday language.
 - Responsive card design with hover effects and loading states
 - Bot XML files stored in `/public/bots/` directory
 - Files: `src/pages/free-bots/index.tsx`, `src/pages/free-bots/free-bots.scss`
+
+### Environment-driven Deriv OAuth (April 2026)
+- Removed all hardcoded auth values from the codebase. The OAuth flow is now driven entirely by environment variables.
+- Required env vars (set per environment, no code changes needed to switch):
+  - `VITE_APP_ID` — Deriv app id
+  - `VITE_REDIRECT_URI` — Full callback URL (e.g. `https://your-domain/auth/callback`)
+  - `VITE_OAUTH_URL` — Deriv OAuth authorize endpoint (`https://oauth.deriv.com/oauth2/authorize`)
+- `rsbuild.config.ts` exposes these vars to the client bundle (via Rsbuild's `loadEnv` for `.env` files plus a `process.env` define block for hosted environments like Replit / Vercel / Cloudflare).
+- `src/auth/auth.config.ts` reads from `process.env.VITE_*` and throws if any value is missing — no `window.location.origin`, no `localhost` detection, no hardcoded URLs.
+- `src/auth/loginWithDeriv.ts` builds the authorize URL purely from config and performs a full-page redirect.
+- `src/pages/auth-callback/auth-callback.tsx` parses `acctN`/`tokenN`/`curN` triples, stores the active token in `sessionStorage` (mirrored to `localStorage` for legacy compatibility), and redirects to `/dashboard`.
+- `.env.example` documents the contract; `.env` is gitignored. On Replit the values live in the Secrets / env panel.

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { AUTH_CONFIG } from '@/auth/auth.config';
 
 type ParsedAccount = {
     loginid: string;
     token: string;
     currency: string;
 };
+
+const POST_LOGIN_REDIRECT = '/dashboard';
 
 /**
  * Pull every (acctN, tokenN, curN) triple out of the OAuth callback URL and
@@ -66,7 +67,7 @@ const AuthCallbackPage = () => {
             localStorage.setItem('accountsList', JSON.stringify(accountsList));
             localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts));
 
-            window.location.replace(AUTH_CONFIG.postLoginRedirect);
+            window.location.replace(POST_LOGIN_REDIRECT);
         } catch (e) {
             // eslint-disable-next-line no-console
             console.error('[auth/callback] failed to process tokens', e);

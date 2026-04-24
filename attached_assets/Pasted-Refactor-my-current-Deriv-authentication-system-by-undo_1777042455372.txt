@@ -1,0 +1,60 @@
+Refactor my current Deriv authentication system by undoing all hardcoded authentication values and replacing them with a clean environment-variable-based OAuth architecture.
+
+CURRENT PROBLEM:
+- The project currently uses hardcoded redirect URLs in the code (e.g. localhost or fixed domain)
+- This causes issues when switching between development, staging, and production
+- It has also caused localhost:8443 redirect errors and deployment mismatches
+
+GOAL:
+Rebuild authentication so that NO URLs are hardcoded anywhere in the codebase.
+
+REQUIREMENTS:
+
+1. REMOVE ALL HARDCODED AUTH VALUES:
+   - Remove any hardcoded redirect_uri values
+   - Remove any window.location.origin usage for OAuth redirect
+   - Remove any localhost references in authentication logic
+   - Remove dependency on @deriv-com/auth-client if it auto-generates redirect URLs
+
+2. IMPLEMENT ENVIRONMENT VARIABLES:
+
+   Create a clean .env system:
+   - VITE_APP_ID=111670
+   - VITE_REDIRECT_URI (must change depending on environment)
+   - VITE_OAUTH_URL=https://oauth.deriv.com/oauth2/authorize
+
+3. UPDATE LOGIN FLOW:
+
+   Replace login logic with a manual OAuth redirect:
+   - Construct URL using env variables only
+   - Example:
+     https://oauth.deriv.com/oauth2/authorize?app_id=APP_ID&redirect_uri=ENCODED_REDIRECT_URI
+
+4. CALLBACK HANDLER (/auth/callback):
+
+   - Extract acct1, token1, cur1, etc. from URL parameters
+   - Convert them into an accounts array
+   - Store active token in sessionStorage
+   - Redirect user to /dashboard
+
+5. ENSURE ENV FLEXIBILITY:
+
+   The app must support:
+   - Local development (localhost redirect in .env)
+   - Replit staging environment
+   - Vercel/Cloudflare production
+
+   BUT WITHOUT CHANGING CODE.
+
+6. FINAL RESULT:
+   - No hardcoded URLs anywhere in authentication system
+   - No localhost redirect issues
+   - Fully environment-driven OAuth flow
+   - Clean separation between code and configuration
+   - Production-ready Deriv authentication system
+
+OUTPUT:
+- Updated auth.config.js (or equivalent)
+- Updated loginWithDeriv() function
+- Updated /auth/callback handler
+- List of removed hardcoded parts

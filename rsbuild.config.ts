@@ -1,8 +1,24 @@
-import { defineConfig } from '@rsbuild/core';
+import { defineConfig, loadEnv } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { pluginSass } from '@rsbuild/plugin-sass';
 
 const path = require('path');
+
+// Load any VITE_*-prefixed values from .env files. On Replit / Vercel /
+// Cloudflare those values come from the platform's env panel instead and
+// are read straight from process.env below.
+const { publicVars: envFilePublicVars } = loadEnv({ prefixes: ['VITE_'] });
+
+const VITE_KEYS = ['VITE_APP_ID', 'VITE_REDIRECT_URI', 'VITE_OAUTH_URL'] as const;
+
+const envFromProcess: Record<string, string> = {};
+for (const key of VITE_KEYS) {
+    const value = process.env[key];
+    if (typeof value === 'string' && value.length > 0) {
+        envFromProcess[`process.env.${key}`] = JSON.stringify(value);
+        envFromProcess[`import.meta.env.${key}`] = JSON.stringify(value);
+    }
+}
 
 export default defineConfig({
     plugins: [
@@ -23,6 +39,7 @@ export default defineConfig({
             index: './src/main.tsx',
         },
         define: {
+            ...envFilePublicVars,
             'process.env': {
                 TRANSLATIONS_CDN_URL: JSON.stringify(process.env.TRANSLATIONS_CDN_URL),
                 R2_PROJECT_NAME: JSON.stringify(process.env.R2_PROJECT_NAME),
@@ -41,6 +58,10 @@ export default defineConfig({
                 RUDDERSTACK_KEY: JSON.stringify(process.env.RUDDERSTACK_KEY),
                 GROWTHBOOK_CLIENT_KEY: JSON.stringify(process.env.GROWTHBOOK_CLIENT_KEY),
                 GROWTHBOOK_DECRYPTION_KEY: JSON.stringify(process.env.GROWTHBOOK_DECRYPTION_KEY),
+                // Env-driven Deriv OAuth config (no hardcoded URLs).
+                VITE_APP_ID: JSON.stringify(process.env.VITE_APP_ID),
+                VITE_REDIRECT_URI: JSON.stringify(process.env.VITE_REDIRECT_URI),
+                VITE_OAUTH_URL: JSON.stringify(process.env.VITE_OAUTH_URL),
             },
         },
         alias: {
