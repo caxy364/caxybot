@@ -2,8 +2,8 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { loginWithDeriv } from '@/auth/loginWithDeriv';
 import ChunkLoader from '@/components/loader/chunk-loader';
-import { generateOAuthURL } from '@/components/shared';
 import DesktopWrapper from '@/components/shared_ui/desktop-wrapper';
 import Dialog from '@/components/shared_ui/dialog';
 import MobileWrapper from '@/components/shared_ui/mobile-wrapper';
@@ -17,14 +17,12 @@ import { useOauth2 } from '@/hooks/auth/useOauth2';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import useTMB from '@/hooks/useTMB';
-import { handleOidcAuthFailure } from '@/utils/auth-utils';
 import {
     LabelPairedChartLineCaptionRegularIcon,
     LabelPairedObjectsColumnCaptionRegularIcon,
     LabelPairedPuzzlePieceTwoCaptionBoldIcon,
 } from '@deriv/quill-icons/LabelPaired';
 import { LegacyGuide1pxIcon } from '@deriv/quill-icons/Legacy';
-import { requestOidcAuthentication } from '@deriv-com/auth-client';
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import RunPanel from '../../components/run-panel';
@@ -233,7 +231,7 @@ const AppWrapper = observer(() => {
     const { isOAuth2Enabled } = useOauth2();
     const handleLoginGeneration = async () => {
         if (!isOAuth2Enabled) {
-            window.location.replace(generateOAuthURL());
+            loginWithDeriv();
         } else {
             const getQueryParams = new URLSearchParams(window.location.search);
             const currency = getQueryParams.get('account') ?? '';
@@ -246,20 +244,8 @@ const AppWrapper = observer(() => {
                 if (tmbEnabled) {
                     await onRenderTMBCheck();
                 } else {
-                    try {
-                        await requestOidcAuthentication({
-                            redirectCallbackUri: `${window.location.origin}/callback`,
-                            ...(query_param_currency
-                                ? {
-                                      state: {
-                                          account: query_param_currency,
-                                      },
-                                  }
-                                : {}),
-                        });
-                    } catch (err) {
-                        handleOidcAuthFailure(err);
-                    }
+                    // Manual Deriv OAuth: stable redirect, no localhost / origin fallback.
+                    loginWithDeriv({ account: query_param_currency });
                 }
             } catch (error) {
                 // eslint-disable-next-line no-console

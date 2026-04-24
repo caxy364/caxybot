@@ -1,12 +1,13 @@
 import { initSurvicate } from '../public-path';
 import { lazy, Suspense } from 'react';
 import React from 'react';
-import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, Navigate, Route, RouterProvider } from 'react-router-dom';
 import ChunkLoader from '@/components/loader/chunk-loader';
 import RoutePromptDialog from '@/components/route-prompt-dialog';
 import { crypto_currencies_display_order, fiat_currencies_display_order } from '@/components/shared';
 import { useOfflineDetection } from '@/hooks/useOfflineDetection';
 import { StoreProvider } from '@/hooks/useStore';
+import AuthCallbackPage from '@/pages/auth-callback';
 import CallbackPage from '@/pages/callback';
 import Endpoint from '@/pages/endpoint';
 import { TAuthData } from '@/types/api-types';
@@ -55,8 +56,10 @@ const router = createBrowserRouter(
         >
             {/* All child routes will be passed as children to Layout */}
             <Route index element={<AppRoot />} />
+            <Route path='dashboard' element={<Navigate to='/' replace />} />
             <Route path='endpoint' element={<Endpoint />} />
             <Route path='callback' element={<CallbackPage />} />
+            <Route path='auth/callback' element={<AuthCallbackPage />} />
             <Route path='free-bots' element={<FreeBots />} />
             <Route path='analysis-tool' element={<AnalysisTool />} />
         </Route>

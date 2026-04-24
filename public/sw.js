@@ -98,9 +98,21 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Skip authentication requests
+    // Skip authentication requests (always bypass cache + service worker)
     if (isAuthRequest(url)) {
         console.log('[SW] Skipping auth request:', url.pathname);
+        return;
+    }
+
+    // Extra explicit guard: NEVER intercept /auth/callback, /oauth, or /authorize
+    // These must always hit the network and never be served from cache.
+    if (
+        url.pathname === '/auth/callback' ||
+        url.pathname.startsWith('/auth/callback') ||
+        url.pathname.startsWith('/oauth') ||
+        url.pathname.startsWith('/authorize')
+    ) {
+        console.log('[SW] Hard-skipping protected auth path:', url.pathname);
         return;
     }
 
