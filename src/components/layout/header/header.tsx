@@ -20,7 +20,6 @@ import { AppLogo } from '../app-logo';
 import AccountsInfoLoader from './account-info-loader';
 import AccountSwitcher from './account-switcher';
 import MenuItems from './menu-items';
-import PlatformSwitcher from './platform-switcher';
 import './header.scss';
 
 type TAppHeaderProps = {
@@ -214,7 +213,6 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
             <Wrapper variant='left'>
                 <AppLogo />
                 {isDesktop && <MenuItems />}
-                {isDesktop && <PlatformSwitcher />}
             </Wrapper>
             <Wrapper variant='right'>
                 {!isDesktop && <PWAInstallButton variant='primary' size='medium' />}
