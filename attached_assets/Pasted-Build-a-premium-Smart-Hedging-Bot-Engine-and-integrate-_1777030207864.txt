@@ -1,0 +1,223 @@
+Build a premium “Smart Hedging Bot Engine” and integrate it into an existing Deriv Bot web interface that is already connected to the Deriv WebSocket API.
+
+IMPORTANT CONTEXT:
+
+* The UI (including the Transactions panel) already exists and must NOT be duplicated or redesigned.
+* The system must plug into the existing interface and reuse the current transaction panel to display all trades.
+* The only external dependency is the Deriv WebSocket API.
+
+OBJECTIVE:
+Create a fully functional multi-strategy trading engine that scans all Deriv continuous volatility indices and executes trades based on hedging logic, digit filters, and user-defined strategies.
+
+---
+
+CORE FEATURES TO BUILD:
+
+1. MAIN CONTROL PANEL
+   Add a control section above the bot with the following inputs:
+
+* Stake (number input)
+* Target Profit (number input)
+* Stop Loss (number input)
+* Martingale toggle (on/off)
+* Martingale multiplier (number input)
+* Run button
+* Stop button
+
+The bot must stop automatically when:
+
+* Target profit is reached
+* Stop loss is reached
+
+---
+
+2. HEDGING STRATEGY (PRIMARY ENGINE)
+
+Implement a simultaneous hedging execution:
+
+* Trade 1: DIGIT OVER 5
+* Trade 2: DIGIT UNDER 4
+
+Both trades must be placed at the same time on the same symbol.
+
+IMPORTANT:
+
+* These trades must be executed using the Deriv WebSocket API (proposal + buy).
+* Each trade must be tracked independently and sent to the existing transaction panel after settlement.
+
+---
+
+3. VOLATILITY MARKET SCANNER
+
+The bot must scan ALL continuous volatility indices:
+
+* R_10, R_25, R_50, R_75, R_100
+* R_10_1S, R_25_1S, R_50_1S, R_75_1S, R_100_1S
+
+Requirements:
+
+* Subscribe to tick streams for each symbol via WebSocket
+* Continuously collect tick data
+* Analyze digits in real time
+* Execute trades only when conditions are met
+
+---
+
+4. DIGIT FILTER SYSTEM
+
+Add a “Digit Check” feature where the user selects:
+
+* Last 2 digits
+* Last 3 digits
+* Last 4 digits
+* Last 5 digits
+
+Also include:
+
+* Target digit selector (only 4 or 5)
+
+Logic:
+
+* Extract the last digit of each tick
+* Check the last N ticks (based on user selection)
+* Only allow trade execution if all selected digits match the chosen digit
+
+This filter must run BEFORE executing the hedge.
+
+---
+
+5. MULTI-STRATEGY BUILDER
+
+Create a dynamic “Strategy Builder” section:
+
+* Button: “+ Add Strategy”
+* Each strategy block should allow:
+
+IF:
+
+* Last N digits (user input: 1–7)
+* Condition:
+
+  * Odd
+  * Even
+  * Over
+  * Under
+  * Rise
+  * Fall
+
+THEN TRADE:
+
+* Odd
+* Even
+* Over
+* Under
+* Rise
+* Fall
+
+Requirements:
+
+* User can add multiple strategies
+* Strategies must run independently
+* All valid strategies can trigger trades
+
+---
+
+6. TRANSACTION PANEL INTEGRATION
+
+DO NOT create a new transaction UI.
+
+Instead:
+
+* Hook into the existing transaction system
+* Every completed trade must be formatted and pushed into the current transaction panel
+
+Each trade record must include:
+
+* Contract type
+* Entry tick
+* Exit tick
+* Buy price
+* Profit/Loss
+
+---
+
+7. DERIV WEBSOCKET API INTEGRATION
+
+Use the Deriv WebSocket API for:
+
+* Authorize (via token or app_id)
+* Tick subscription
+* Proposal requests
+* Buy contracts
+* Contract updates (open/closed)
+
+Structure:
+
+* Maintain a persistent WebSocket connection
+* Handle reconnects gracefully
+* Track each contract lifecycle from purchase to settlement
+
+---
+
+8. BOT EXECUTION FLOW
+
+When user clicks RUN:
+
+* Connect to WebSocket
+* Start tick subscriptions for all volatility indices
+* Continuously scan markets
+* Apply:
+
+  * Digit filter
+  * Strategy conditions
+* Execute:
+
+  * Hedging trades OR strategy trades
+* Track all trades
+* Send results to transaction panel
+* Monitor profit/loss and stop when limits are reached
+
+---
+
+9. RISK MANAGEMENT
+
+* Stop trading immediately when:
+
+  * Total profit >= target profit
+  * Total loss >= stop loss
+* Apply martingale only after a loss
+* Reset martingale after a win
+* Allow user-defined multiplier
+
+---
+
+10. UI/UX REQUIREMENTS
+
+* Maintain existing Deriv Bot UI style
+* Add new sections cleanly below “Smart Fortune”
+* Do NOT break or overwrite existing components
+* Ensure responsive and smooth performance
+* Show live status (e.g., “Scanning Volatility 75...”)
+
+---
+
+TECH STACK:
+
+* HTML, CSS, Vanilla JavaScript (modular structure)
+* WebSocket (Deriv API)
+* No frameworks unless necessary
+
+---
+
+EXPECTED OUTPUT:
+
+* Fully working bot engine integrated into existing UI
+* Clean, modular JavaScript
+* Real-time trading + transaction logging
+* Accurate execution using Deriv API
+
+---
+
+FOCUS:
+
+Accuracy, real-time performance, clean integration, and production-level structure.
