@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { observer } from 'mobx-react-lite';
+import React, { useEffect, useRef, useState } from 'react';
+import { observer as obs } from 'mobx-react-lite';
 import {
     SmartHedgingEngine,
     VOLATILITY_SYMBOLS,
     type TBotConfig,
+    type TMartingaleMode,
     type TStrategy,
     type TVolatilitySymbol,
 } from './engine';
@@ -14,28 +15,70 @@ const STRATEGY_ACTIONS = ['odd', 'even', 'over', 'under', 'rise', 'fall'] as con
 
 const newId = () => `s_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-const SmartFortune: React.FC = observer(() => {
-    const [stake, setStake] = useState<number>(1);
-    const [target_profit, setTargetProfit] = useState<number>(10);
-    const [stop_loss, setStopLoss] = useState<number>(10);
-    const [martingale_enabled, setMartingaleEnabled] = useState<boolean>(false);
-    const [martingale_multiplier, setMartingaleMultiplier] = useState<number>(2);
-    const [hedge_enabled, setHedgeEnabled] = useState<boolean>(true);
-    const [digit_filter_enabled, setDigitFilterEnabled] = useState<boolean>(false);
-    const [digit_filter_last_n, setDigitFilterLastN] = useState<number>(2);
-    const [digit_filter_target, setDigitFilterTarget] = useState<4 | 5>(5);
-    const [selected_symbols, setSelectedSymbols] = useState<TVolatilitySymbol[]>([
-        '1HZ15V',
-        '1HZ30V',
-        '1HZ90V',
-    ]);
-    const [strategies, setStrategies] = useState<TStrategy[]>([]);
-    const [is_running, setIsRunning] = useState<boolean>(false);
-    const [status, setStatus] = useState<string>('Idle');
-    const [pnl, setPnl] = useState<number>(0);
-    const [trade_count, setTradeCount] = useState<number>(0);
-    const [error_msg, setErrorMsg] = useState<string>('');
+type TStats = {
+    status: string;
+    pnl: number;
+    trades: number;
+    error: string;
+    running: boolean;
+};
+
+const initialStats: TStats = {
+    status: 'Idle',
+    pnl: 0,
+    trades: 0,
+    error: '',
+    running: false,
+};
+
+const PnlPill: React.FC<{ value: number }> = ({ value }) => {
+    const cls = value > 0 ? 'sf-pnl sf-pnl--pos' : value < 0 ? 'sf-pnl sf-pnl--neg' : 'sf-pnl';
+    return <span className={cls}>{value.toFixed(2)}</span>;
+};
+
+const StatsBar: React.FC<{ stats: TStats }> = ({ stats }) => (
+    <div className='sf-stats'>
+        <div className='sf-stat'>
+            <span className='sf-stat__label'>Status</span>
+            <span className='sf-stat__value'>{stats.status}</span>
+        </div>
+        <div className='sf-stat'>
+            <span className='sf-stat__label'>Trades</span>
+            <span className='sf-stat__value'>{stats.trades}</span>
+        </div>
+        <div className='sf-stat'>
+            <span className='sf-stat__label'>Net P/L</span>
+            <PnlPill value={stats.pnl} />
+        </div>
+    </div>
+);
+
+const useEngineStats = () => {
+    const [stats, setStats] = useState<TStats>(initialStats);
     const engine_ref = useRef<SmartHedgingEngine | null>(null);
+
+    const start = (config: TBotConfig) => {
+        setStats({ ...initialStats, running: true, status: 'Starting...' });
+        const engine = new SmartHedgingEngine(config);
+        engine.on(evt => {
+            setStats(prev => {
+                const next = { ...prev };
+                if (evt.type === 'status') next.status = evt.message;
+                if (evt.type === 'pnl') next.pnl = evt.total;
+                if (evt.type === 'trade') next.trades = prev.trades + 1;
+                if (evt.type === 'error') next.error = evt.message;
+                if (evt.type === 'stopped') next.running = false;
+                return next;
+            });
+        });
+        engine_ref.current = engine;
+        engine.start();
+    };
+
+    const stop = () => {
+        engine_ref.current?.stop('manual');
+        setStats(prev => ({ ...prev, running: false, status: 'Stopped by user' }));
+    };
 
     useEffect(() => {
         return () => {
@@ -43,22 +86,225 @@ const SmartFortune: React.FC = observer(() => {
         };
     }, []);
 
-    const toggleSymbol = (sym: TVolatilitySymbol) => {
-        setSelectedSymbols(prev =>
-            prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]
-        );
+    return { stats, start, stop, setError: (e: string) => setStats(s => ({ ...s, error: e })) };
+};
+
+/* -------------------------------------------------------------------------- */
+/*                              Hedging Section                               */
+/* -------------------------------------------------------------------------- */
+
+const HedgingSection: React.FC = () => {
+    const [stake, setStake] = useState<number>(1);
+    const [tp, setTp] = useState<number>(100);
+    const [sl, setSl] = useState<number>(100);
+    const [multiplier, setMultiplier] = useState<number>(2.1);
+    const [martingale_mode, setMartingaleMode] = useState<TMartingaleMode>('both_lose');
+    const [digit_filter_enabled, setDigitFilterEnabled] = useState<boolean>(false);
+    const [digit_n, setDigitN] = useState<number>(4);
+    const [digit_target, setDigitTarget] = useState<4 | 5>(5);
+    const [selected, setSelected] = useState<TVolatilitySymbol[]>([
+        '1HZ15V',
+        '1HZ30V',
+        '1HZ90V',
+    ]);
+    const { stats, start, stop, setError } = useEngineStats();
+
+    const toggle = (s: TVolatilitySymbol) => {
+        if (stats.running) return;
+        setSelected(prev => (prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]));
+    };
+
+    const handleRun = () => {
+        if (selected.length === 0) {
+            setError('Pick at least one volatility market.');
+            return;
+        }
+        setError('');
+        start({
+            mode: 'hedging',
+            stake,
+            target_profit: tp,
+            stop_loss: sl,
+            martingale_enabled: true,
+            martingale_multiplier: multiplier,
+            martingale_mode,
+            digit_filter_enabled,
+            digit_filter_last_n: digit_n,
+            digit_filter_target: digit_target,
+            strategies: [],
+            symbols: selected,
+        });
+    };
+
+    return (
+        <section className='sf-card'>
+            <div className='sf-card__head-row'>
+                <div>
+                    <h3 className='sf-card__title'>Hedging Engine</h3>
+                    <p className='sf-card__hint'>
+                        Places DIGIT OVER 5 + DIGIT UNDER 4 simultaneously on every selected
+                        market.
+                    </p>
+                </div>
+                <StatsBar stats={stats} />
+            </div>
+
+            {stats.error ? <div className='sf-error'>{stats.error}</div> : null}
+
+            <div className='sf-form sf-form--four'>
+                <label className='sf-field'>
+                    <span>Stake (USD)</span>
+                    <input
+                        type='number'
+                        min={0.35}
+                        step={0.1}
+                        value={stake}
+                        disabled={stats.running}
+                        onChange={e => setStake(Number(e.target.value))}
+                    />
+                </label>
+                <label className='sf-field'>
+                    <span>Target Profit</span>
+                    <input
+                        type='number'
+                        min={0}
+                        value={tp}
+                        disabled={stats.running}
+                        onChange={e => setTp(Number(e.target.value))}
+                    />
+                </label>
+                <label className='sf-field'>
+                    <span>Stop Loss</span>
+                    <input
+                        type='number'
+                        min={0}
+                        value={sl}
+                        disabled={stats.running}
+                        onChange={e => setSl(Number(e.target.value))}
+                    />
+                </label>
+                <label className='sf-field'>
+                    <span>Multiplier</span>
+                    <input
+                        type='number'
+                        min={1}
+                        step={0.1}
+                        value={multiplier}
+                        disabled={stats.running}
+                        onChange={e => setMultiplier(Number(e.target.value))}
+                    />
+                </label>
+            </div>
+
+            <div className='sf-form sf-form--two'>
+                <label className='sf-field'>
+                    <span>Digits to Check</span>
+                    <select
+                        value={digit_filter_enabled ? digit_n : 0}
+                        disabled={stats.running}
+                        onChange={e => {
+                            const v = Number(e.target.value);
+                            if (v === 0) setDigitFilterEnabled(false);
+                            else {
+                                setDigitFilterEnabled(true);
+                                setDigitN(v);
+                            }
+                        }}
+                    >
+                        <option value={0}>Off</option>
+                        <option value={2}>Last 2 digits</option>
+                        <option value={3}>Last 3 digits</option>
+                        <option value={4}>Last 4 digits</option>
+                        <option value={5}>Last 5 digits</option>
+                    </select>
+                </label>
+                <label className='sf-field'>
+                    <span>Martingale Mode</span>
+                    <select
+                        value={martingale_mode}
+                        disabled={stats.running}
+                        onChange={e => setMartingaleMode(e.target.value as TMartingaleMode)}
+                    >
+                        <option value='both_lose'>When BOTH lose</option>
+                        <option value='any_loss'>On any loss</option>
+                    </select>
+                </label>
+                {digit_filter_enabled && (
+                    <label className='sf-field'>
+                        <span>Target Digit</span>
+                        <select
+                            value={digit_target}
+                            disabled={stats.running}
+                            onChange={e => setDigitTarget(Number(e.target.value) as 4 | 5)}
+                        >
+                            <option value={4}>4</option>
+                            <option value={5}>5</option>
+                        </select>
+                    </label>
+                )}
+            </div>
+
+            <div className='sf-actions sf-actions--center'>
+                {stats.running ? (
+                    <button className='sf-btn sf-btn--stop sf-btn--big' onClick={stop} type='button'>
+                        ■ Stop
+                    </button>
+                ) : (
+                    <button
+                        className='sf-btn sf-btn--run sf-btn--big'
+                        onClick={handleRun}
+                        type='button'
+                    >
+                        ▶ Execute Trades
+                    </button>
+                )}
+            </div>
+
+            <div className='sf-market-grid'>
+                {VOLATILITY_SYMBOLS.map(s => {
+                    const active = selected.includes(s.code);
+                    return (
+                        <button
+                            key={s.code}
+                            type='button'
+                            disabled={stats.running}
+                            onClick={() => toggle(s.code)}
+                            className={`sf-market ${active ? 'sf-market--active' : ''}`}
+                        >
+                            {s.label}
+                        </button>
+                    );
+                })}
+            </div>
+        </section>
+    );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                            Strategy Section                                */
+/* -------------------------------------------------------------------------- */
+
+const StrategySection: React.FC = () => {
+    const [stake, setStake] = useState<number>(10);
+    const [tp, setTp] = useState<number>(100);
+    const [sl, setSl] = useState<number>(100);
+    const [martingale_enabled, setMartingaleEnabled] = useState<boolean>(true);
+    const [multiplier, setMultiplier] = useState<number>(2.1);
+    const [strategies, setStrategies] = useState<TStrategy[]>([
+        { id: newId(), last_n: 4, condition: 'odd', action: 'even' },
+    ]);
+    const [selected, setSelected] = useState<TVolatilitySymbol[]>(['1HZ15V', '1HZ30V', '1HZ90V']);
+    const { stats, start, stop, setError } = useEngineStats();
+
+    const toggle = (s: TVolatilitySymbol) => {
+        if (stats.running) return;
+        setSelected(prev => (prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]));
     };
 
     const addStrategy = () => {
         setStrategies(prev => [
             ...prev,
-            {
-                id: newId(),
-                last_n: 3,
-                condition: 'even',
-                action: 'even',
-                over_under_value: 5,
-            },
+            { id: newId(), last_n: 3, condition: 'even', action: 'even', over_under_value: 5 },
         ]);
     };
 
@@ -70,326 +316,256 @@ const SmartFortune: React.FC = observer(() => {
         setStrategies(prev => prev.filter(s => s.id !== id));
     };
 
-    const handleStart = () => {
-        if (selected_symbols.length === 0) {
-            setErrorMsg('Pick at least one volatility market.');
+    const handleRun = () => {
+        if (strategies.length === 0) {
+            setError('Add at least one strategy.');
             return;
         }
-        setErrorMsg('');
-        setPnl(0);
-        setTradeCount(0);
-        const cfg: TBotConfig = {
+        if (selected.length === 0) {
+            setError('Pick at least one volatility market.');
+            return;
+        }
+        setError('');
+        start({
+            mode: 'strategies',
             stake,
-            target_profit,
-            stop_loss,
+            target_profit: tp,
+            stop_loss: sl,
             martingale_enabled,
-            martingale_multiplier,
-            digit_filter_enabled,
-            digit_filter_last_n,
-            digit_filter_target,
-            hedge_enabled,
+            martingale_multiplier: multiplier,
+            digit_filter_enabled: false,
+            digit_filter_last_n: 0,
+            digit_filter_target: 5,
             strategies,
-            symbols: selected_symbols,
-        };
-        const engine = new SmartHedgingEngine(cfg);
-        engine.on(evt => {
-            if (evt.type === 'status') setStatus(evt.message);
-            if (evt.type === 'pnl') setPnl(evt.total);
-            if (evt.type === 'trade') setTradeCount(c => c + 1);
-            if (evt.type === 'error') setErrorMsg(evt.message);
-            if (evt.type === 'stopped') setIsRunning(false);
+            symbols: selected,
         });
-        engine_ref.current = engine;
-        setIsRunning(true);
-        engine.start();
     };
-
-    const handleStop = () => {
-        engine_ref.current?.stop('manual');
-        setIsRunning(false);
-        setStatus('Stopped by user');
-    };
-
-    const pnl_class = useMemo(() => {
-        if (pnl > 0) return 'sf-pnl sf-pnl--pos';
-        if (pnl < 0) return 'sf-pnl sf-pnl--neg';
-        return 'sf-pnl';
-    }, [pnl]);
 
     return (
-        <div className='smart-fortune'>
-            <div className='sf-header'>
+        <section className='sf-card'>
+            <div className='sf-card__head-row'>
                 <div>
-                    <h2 className='sf-title'>Smart Fortune Engine</h2>
-                    <p className='sf-subtitle'>
-                        Multi-strategy hedging bot — scans Volatility 15, 30, 90 (1s) live and
-                        pushes every settled trade into the Transactions panel below.
+                    <h3 className='sf-card__title'>Strategy Builder</h3>
+                    <p className='sf-card__hint'>
+                        Multi-Strategy bot — runs up to 5 strategies at once. Example: <em>If the
+                        last 4 digits are ODD, trade EVEN.</em> Rise/Fall use market moves; other
+                        contracts use last digits.
                     </p>
                 </div>
-                <div className='sf-stats'>
-                    <div className='sf-stat'>
-                        <span className='sf-stat__label'>Status</span>
-                        <span className='sf-stat__value'>{status}</span>
-                    </div>
-                    <div className='sf-stat'>
-                        <span className='sf-stat__label'>Trades</span>
-                        <span className='sf-stat__value'>{trade_count}</span>
-                    </div>
-                    <div className='sf-stat'>
-                        <span className='sf-stat__label'>Net P/L</span>
-                        <span className={pnl_class}>{pnl.toFixed(2)}</span>
-                    </div>
-                </div>
+                <StatsBar stats={stats} />
             </div>
 
-            {error_msg ? <div className='sf-error'>{error_msg}</div> : null}
+            {stats.error ? <div className='sf-error'>{stats.error}</div> : null}
 
-            <div className='sf-grid'>
-                <section className='sf-card'>
-                    <h3 className='sf-card__title'>Control Panel</h3>
-                    <div className='sf-form'>
-                        <label className='sf-field'>
-                            <span>Stake</span>
-                            <input
-                                type='number'
-                                min={0.35}
-                                step={0.1}
-                                value={stake}
-                                disabled={is_running}
-                                onChange={e => setStake(Number(e.target.value))}
-                            />
-                        </label>
-                        <label className='sf-field'>
-                            <span>Target Profit</span>
-                            <input
-                                type='number'
-                                min={0}
-                                step={0.5}
-                                value={target_profit}
-                                disabled={is_running}
-                                onChange={e => setTargetProfit(Number(e.target.value))}
-                            />
-                        </label>
-                        <label className='sf-field'>
-                            <span>Stop Loss</span>
-                            <input
-                                type='number'
-                                min={0}
-                                step={0.5}
-                                value={stop_loss}
-                                disabled={is_running}
-                                onChange={e => setStopLoss(Number(e.target.value))}
-                            />
-                        </label>
-                        <label className='sf-field sf-field--toggle'>
-                            <span>Martingale</span>
-                            <input
-                                type='checkbox'
-                                checked={martingale_enabled}
-                                disabled={is_running}
-                                onChange={e => setMartingaleEnabled(e.target.checked)}
-                            />
-                        </label>
-                        <label className='sf-field'>
-                            <span>Multiplier</span>
-                            <input
-                                type='number'
-                                min={1}
-                                step={0.1}
-                                value={martingale_multiplier}
-                                disabled={is_running || !martingale_enabled}
-                                onChange={e => setMartingaleMultiplier(Number(e.target.value))}
-                            />
-                        </label>
-                        <label className='sf-field sf-field--toggle'>
-                            <span>Hedging (Over 5 + Under 4)</span>
-                            <input
-                                type='checkbox'
-                                checked={hedge_enabled}
-                                disabled={is_running}
-                                onChange={e => setHedgeEnabled(e.target.checked)}
-                            />
-                        </label>
-                    </div>
+            <div className='sf-form sf-form--four'>
+                <label className='sf-field'>
+                    <span>Stake (USD)</span>
+                    <input
+                        type='number'
+                        min={0.35}
+                        step={0.1}
+                        value={stake}
+                        disabled={stats.running}
+                        onChange={e => setStake(Number(e.target.value))}
+                    />
+                </label>
+                <label className='sf-field'>
+                    <span>Target Profit</span>
+                    <input
+                        type='number'
+                        min={0}
+                        value={tp}
+                        disabled={stats.running}
+                        onChange={e => setTp(Number(e.target.value))}
+                    />
+                </label>
+                <label className='sf-field'>
+                    <span>Stop Loss</span>
+                    <input
+                        type='number'
+                        min={0}
+                        value={sl}
+                        disabled={stats.running}
+                        onChange={e => setSl(Number(e.target.value))}
+                    />
+                </label>
+                <label className='sf-field'>
+                    <span>Martingale</span>
+                    <input
+                        type='number'
+                        min={1}
+                        step={0.1}
+                        value={multiplier}
+                        disabled={stats.running || !martingale_enabled}
+                        onChange={e => setMultiplier(Number(e.target.value))}
+                    />
+                </label>
+            </div>
 
-                    <div className='sf-actions'>
-                        {is_running ? (
-                            <button className='sf-btn sf-btn--stop' onClick={handleStop}>
-                                Stop
-                            </button>
-                        ) : (
-                            <button className='sf-btn sf-btn--run' onClick={handleStart}>
-                                Run
-                            </button>
-                        )}
-                    </div>
-                </section>
+            <label className='sf-field sf-field--toggle sf-field--inline'>
+                <span>Enable Martingale</span>
+                <input
+                    type='checkbox'
+                    checked={martingale_enabled}
+                    disabled={stats.running}
+                    onChange={e => setMartingaleEnabled(e.target.checked)}
+                />
+            </label>
 
-                <section className='sf-card'>
-                    <h3 className='sf-card__title'>Volatility Markets</h3>
-                    <div className='sf-symbols'>
-                        {VOLATILITY_SYMBOLS.map(s => {
-                            const active = selected_symbols.includes(s.code);
-                            return (
+            <div className='sf-strategies-head'>
+                <strong>Strategies</strong>
+                <button
+                    className='sf-btn sf-btn--add'
+                    onClick={addStrategy}
+                    disabled={stats.running || strategies.length >= 5}
+                    type='button'
+                >
+                    + Add Strategy
+                </button>
+            </div>
+
+            {strategies.length === 0 ? (
+                <p className='sf-empty'>No strategies yet. Add one to start.</p>
+            ) : (
+                <div className='sf-strategies'>
+                    {strategies.map((s, idx) => (
+                        <div key={s.id} className='sf-strategy'>
+                            <div className='sf-strategy__header'>
+                                <strong className='sf-strategy__title'>STRATEGY {idx + 1}</strong>
                                 <button
-                                    key={s.code}
-                                    className={`sf-chip ${active ? 'sf-chip--active' : ''}`}
-                                    onClick={() => toggleSymbol(s.code)}
-                                    disabled={is_running}
+                                    className='sf-btn sf-btn--ghost'
+                                    onClick={() => removeStrategy(s.id)}
+                                    disabled={stats.running}
                                     type='button'
                                 >
-                                    {s.label}
+                                    REMOVE
                                 </button>
-                            );
-                        })}
-                    </div>
-
-                    <h3 className='sf-card__title sf-card__title--mt'>Digit Filter</h3>
-                    <div className='sf-form'>
-                        <label className='sf-field sf-field--toggle'>
-                            <span>Enable filter</span>
-                            <input
-                                type='checkbox'
-                                checked={digit_filter_enabled}
-                                disabled={is_running}
-                                onChange={e => setDigitFilterEnabled(e.target.checked)}
-                            />
-                        </label>
-                        <label className='sf-field'>
-                            <span>Check last</span>
-                            <select
-                                value={digit_filter_last_n}
-                                disabled={is_running || !digit_filter_enabled}
-                                onChange={e => setDigitFilterLastN(Number(e.target.value))}
-                            >
-                                <option value={2}>2 digits</option>
-                                <option value={3}>3 digits</option>
-                                <option value={4}>4 digits</option>
-                                <option value={5}>5 digits</option>
-                            </select>
-                        </label>
-                        <label className='sf-field'>
-                            <span>Target digit</span>
-                            <select
-                                value={digit_filter_target}
-                                disabled={is_running || !digit_filter_enabled}
-                                onChange={e =>
-                                    setDigitFilterTarget(Number(e.target.value) as 4 | 5)
-                                }
-                            >
-                                <option value={4}>4</option>
-                                <option value={5}>5</option>
-                            </select>
-                        </label>
-                    </div>
-                </section>
-
-                <section className='sf-card sf-card--full'>
-                    <div className='sf-card__head-row'>
-                        <h3 className='sf-card__title'>Strategy Builder</h3>
-                        <button
-                            className='sf-btn sf-btn--add'
-                            onClick={addStrategy}
-                            disabled={is_running}
-                            type='button'
-                        >
-                            + Add Strategy
-                        </button>
-                    </div>
-                    {strategies.length === 0 ? (
-                        <p className='sf-empty'>No custom strategies. Hedging will run alone.</p>
-                    ) : (
-                        <div className='sf-strategies'>
-                            {strategies.map((s, idx) => (
-                                <div key={s.id} className='sf-strategy'>
-                                    <div className='sf-strategy__header'>
-                                        <strong>Strategy {idx + 1}</strong>
-                                        <button
-                                            className='sf-btn sf-btn--ghost'
-                                            onClick={() => removeStrategy(s.id)}
-                                            disabled={is_running}
-                                            type='button'
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                    <div className='sf-strategy__row'>
-                                        <span>IF last</span>
-                                        <input
-                                            type='number'
-                                            min={1}
-                                            max={7}
-                                            value={s.last_n}
-                                            disabled={is_running}
-                                            onChange={e =>
-                                                updateStrategy(s.id, {
-                                                    last_n: Math.min(
-                                                        7,
-                                                        Math.max(1, Number(e.target.value))
-                                                    ),
-                                                })
-                                            }
-                                        />
-                                        <span>digits are</span>
-                                        <select
-                                            value={s.condition}
-                                            disabled={is_running}
-                                            onChange={e =>
-                                                updateStrategy(s.id, {
-                                                    condition: e.target.value as TStrategy['condition'],
-                                                })
-                                            }
-                                        >
-                                            {STRATEGY_CONDITIONS.map(c => (
-                                                <option key={c} value={c}>
-                                                    {c}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        {(s.condition === 'over' || s.condition === 'under') && (
-                                            <input
-                                                type='number'
-                                                min={0}
-                                                max={9}
-                                                value={s.over_under_value ?? 5}
-                                                disabled={is_running}
-                                                onChange={e =>
-                                                    updateStrategy(s.id, {
-                                                        over_under_value: Number(e.target.value),
-                                                    })
-                                                }
-                                            />
-                                        )}
-                                    </div>
-                                    <div className='sf-strategy__row'>
-                                        <span>THEN trade</span>
-                                        <select
-                                            value={s.action}
-                                            disabled={is_running}
-                                            onChange={e =>
-                                                updateStrategy(s.id, {
-                                                    action: e.target.value as TStrategy['action'],
-                                                })
-                                            }
-                                        >
-                                            {STRATEGY_ACTIONS.map(a => (
-                                                <option key={a} value={a}>
-                                                    {a}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                            ))}
+                            </div>
+                            <div className='sf-strategy__row'>
+                                <span>IF THE LAST</span>
+                                <input
+                                    type='number'
+                                    min={1}
+                                    max={7}
+                                    value={s.last_n}
+                                    disabled={stats.running}
+                                    onChange={e =>
+                                        updateStrategy(s.id, {
+                                            last_n: Math.min(
+                                                7,
+                                                Math.max(1, Number(e.target.value))
+                                            ),
+                                        })
+                                    }
+                                />
+                                <span>DIGITS / MOVES ARE</span>
+                                <select
+                                    value={s.condition}
+                                    disabled={stats.running}
+                                    onChange={e =>
+                                        updateStrategy(s.id, {
+                                            condition: e.target.value as TStrategy['condition'],
+                                        })
+                                    }
+                                >
+                                    {STRATEGY_CONDITIONS.map(c => (
+                                        <option key={c} value={c}>
+                                            {c.toUpperCase()}
+                                        </option>
+                                    ))}
+                                </select>
+                                {(s.condition === 'over' || s.condition === 'under') && (
+                                    <input
+                                        type='number'
+                                        min={0}
+                                        max={9}
+                                        value={s.over_under_value ?? 5}
+                                        disabled={stats.running}
+                                        onChange={e =>
+                                            updateStrategy(s.id, {
+                                                over_under_value: Number(e.target.value),
+                                            })
+                                        }
+                                    />
+                                )}
+                            </div>
+                            <div className='sf-strategy__row'>
+                                <span>THEN TRADE</span>
+                                <select
+                                    value={s.action}
+                                    disabled={stats.running}
+                                    onChange={e =>
+                                        updateStrategy(s.id, {
+                                            action: e.target.value as TStrategy['action'],
+                                        })
+                                    }
+                                >
+                                    {STRATEGY_ACTIONS.map(a => (
+                                        <option key={a} value={a}>
+                                            {a.toUpperCase()}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
-                    )}
-                </section>
+                    ))}
+                </div>
+            )}
+
+            <div className='sf-actions sf-actions--center'>
+                {stats.running ? (
+                    <button className='sf-btn sf-btn--stop sf-btn--big' onClick={stop} type='button'>
+                        ■ Stop
+                    </button>
+                ) : (
+                    <button
+                        className='sf-btn sf-btn--run sf-btn--big'
+                        onClick={handleRun}
+                        type='button'
+                    >
+                        ▶ Execute Strategies
+                    </button>
+                )}
             </div>
 
-            <p className='sf-note'>
-                Trades placed by Smart Fortune appear automatically in the existing Transactions
-                panel. Make sure you are logged in to your Deriv account before running.
-            </p>
+            <div className='sf-market-grid'>
+                {VOLATILITY_SYMBOLS.map(s => {
+                    const active = selected.includes(s.code);
+                    return (
+                        <button
+                            key={s.code}
+                            type='button'
+                            disabled={stats.running}
+                            onClick={() => toggle(s.code)}
+                            className={`sf-market ${active ? 'sf-market--active' : ''}`}
+                        >
+                            {s.label}
+                        </button>
+                    );
+                })}
+            </div>
+        </section>
+    );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                                  Page                                      */
+/* -------------------------------------------------------------------------- */
+
+const SmartFortune: React.FC = obs(() => {
+    return (
+        <div className='smart-fortune'>
+            <header className='sf-page-header'>
+                <h2 className='sf-title'>Smart Fortune</h2>
+                <p className='sf-subtitle'>
+                    Two engines, one panel. Strategies runs your custom rules. Hedging fires
+                    OVER 5 + UNDER 4 simultaneously. Every settled trade lands in the
+                    Transactions panel of this app.
+                </p>
+            </header>
+
+            <StrategySection />
+            <HedgingSection />
         </div>
     );
 });

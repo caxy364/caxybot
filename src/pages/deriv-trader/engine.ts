@@ -1,11 +1,34 @@
-import { api_base } from '@/external/bot-skeleton';
+import { api_base, observer } from '@/external/bot-skeleton';
 
-export type TVolatilitySymbol = '1HZ15V' | '1HZ30V' | '1HZ90V';
+export type TVolatilitySymbol =
+    | 'R_10'
+    | 'R_25'
+    | 'R_50'
+    | 'R_75'
+    | 'R_100'
+    | 'R_10_1S'
+    | 'R_25_1S'
+    | 'R_50_1S'
+    | 'R_75_1S'
+    | 'R_100_1S'
+    | '1HZ15V'
+    | '1HZ30V'
+    | '1HZ90V';
 
 export const VOLATILITY_SYMBOLS: { code: TVolatilitySymbol; label: string }[] = [
-    { code: '1HZ15V', label: 'Volatility 15 (1s)' },
-    { code: '1HZ30V', label: 'Volatility 30 (1s)' },
-    { code: '1HZ90V', label: 'Volatility 90 (1s)' },
+    { code: 'R_10', label: 'V 10' },
+    { code: 'R_25', label: 'V 25' },
+    { code: 'R_50', label: 'V 50' },
+    { code: 'R_75', label: 'V 75' },
+    { code: 'R_100', label: 'V 100' },
+    { code: 'R_10_1S', label: 'V 10 (1s)' },
+    { code: 'R_25_1S', label: 'V 25 (1s)' },
+    { code: 'R_50_1S', label: 'V 50 (1s)' },
+    { code: 'R_75_1S', label: 'V 75 (1s)' },
+    { code: 'R_100_1S', label: 'V 100 (1s)' },
+    { code: '1HZ15V', label: 'V 15 (1s)' },
+    { code: '1HZ30V', label: 'V 30 (1s)' },
+    { code: '1HZ90V', label: 'V 90 (1s)' },
 ];
 
 export type TStrategyCondition = 'odd' | 'even' | 'over' | 'under' | 'rise' | 'fall';
@@ -19,16 +42,19 @@ export type TStrategy = {
     over_under_value?: number;
 };
 
+export type TMartingaleMode = 'both_lose' | 'any_loss';
+
 export type TBotConfig = {
+    mode: 'hedging' | 'strategies';
     stake: number;
     target_profit: number;
     stop_loss: number;
     martingale_enabled: boolean;
     martingale_multiplier: number;
+    martingale_mode?: TMartingaleMode;
     digit_filter_enabled: boolean;
     digit_filter_last_n: number;
     digit_filter_target: 4 | 5;
-    hedge_enabled: boolean;
     strategies: TStrategy[];
     symbols: TVolatilitySymbol[];
 };
@@ -58,9 +84,10 @@ export class SmartHedgingEngine {
     subscriptions: Map<string, any> = new Map();
     contract_subscription: any = null;
     listeners: TListener[] = [];
-    open_contracts: Set<number> = new Set();
+    open_contracts: Map<number, { symbol: string; group?: string }> = new Map();
     settled_contracts: Set<number> = new Set();
     in_flight: Set<string> = new Set();
+    hedge_groups: Map<string, { wins: number; losses: number; expected: number }> = new Map();
 
     constructor(config: TBotConfig) {
         this.config = config;
@@ -78,7 +105,7 @@ export class SmartHedgingEngine {
         this.listeners.forEach(l => {
             try {
                 l(event);
-            } catch (e) {
+            } catch {
                 /* noop */
             }
         });
@@ -117,7 +144,7 @@ export class SmartHedgingEngine {
                 this.pip_sizes[s.symbol] = s.pip ? Math.max(0, -Math.log10(s.pip)) : 2;
             });
         } catch {
-            /* fall back to default pip size */
+            /* fall back */
         }
         this.config.symbols.forEach(sym => {
             if (this.pip_sizes[sym] === undefined) this.pip_sizes[sym] = 2;
@@ -143,34 +170,71 @@ export class SmartHedgingEngine {
     }
 
     private subscribeToContracts() {
-        // The existing api_base already subscribes to proposal_open_contract
-        // and forwards events to the transactions store. We listen to the same
-        // stream to compute realized PnL for our own engine.
         this.contract_subscription = api_base.api
             .subscribe({ proposal_open_contract: 1, subscribe: 1 })
             .subscribe((data: any) => {
                 const c = data?.proposal_open_contract;
                 if (!c?.contract_id) return;
-                if (!this.open_contracts.has(c.contract_id)) return;
+                const tracked = this.open_contracts.get(c.contract_id);
+                if (!tracked) return;
+
+                // Forward to existing Transactions panel
+                try {
+                    observer.emit('bot.contract', c);
+                } catch {
+                    /* noop */
+                }
+
                 if (c.is_sold && !this.settled_contracts.has(c.contract_id)) {
                     this.settled_contracts.add(c.contract_id);
                     const profit = Number(c.profit) || 0;
                     this.total_pnl += profit;
                     this.emit({ type: 'pnl', total: this.total_pnl });
-                    if (profit < 0) {
-                        this.consecutive_losses += 1;
-                        if (this.config.martingale_enabled) {
-                            this.current_stake = Math.round(
-                                this.current_stake * Math.max(1, this.config.martingale_multiplier) * 100
-                            ) / 100;
-                        }
-                    } else {
-                        this.consecutive_losses = 0;
-                        this.current_stake = this.config.stake;
-                    }
+                    this.handleMartingale(profit, tracked.group);
                     this.checkLimits();
                 }
             });
+    }
+
+    private handleMartingale(profit: number, group?: string) {
+        if (!this.config.martingale_enabled) {
+            this.consecutive_losses = profit < 0 ? this.consecutive_losses + 1 : 0;
+            if (profit >= 0) this.current_stake = this.config.stake;
+            return;
+        }
+
+        if (this.config.mode === 'hedging' && group) {
+            // For hedging, decide based on group settlement
+            const g = this.hedge_groups.get(group);
+            if (!g) return;
+            if (profit < 0) g.losses += 1;
+            else g.wins += 1;
+            if (g.wins + g.losses < g.expected) return;
+
+            const both_lose = g.losses === g.expected;
+            const any_loss = g.losses > 0;
+            const trigger =
+                this.config.martingale_mode === 'any_loss' ? any_loss : both_lose;
+            if (trigger) {
+                this.current_stake = Math.round(
+                    this.current_stake * Math.max(1, this.config.martingale_multiplier) * 100
+                ) / 100;
+            } else {
+                this.current_stake = this.config.stake;
+            }
+            this.hedge_groups.delete(group);
+            return;
+        }
+
+        if (profit < 0) {
+            this.consecutive_losses += 1;
+            this.current_stake = Math.round(
+                this.current_stake * Math.max(1, this.config.martingale_multiplier) * 100
+            ) / 100;
+        } else {
+            this.consecutive_losses = 0;
+            this.current_stake = this.config.stake;
+        }
     }
 
     private checkLimits() {
@@ -204,16 +268,17 @@ export class SmartHedgingEngine {
         const ticks = this.tick_history[symbol] || [];
         if (ticks.length < 2) return;
 
-        // Hedging strategy
-        if (this.config.hedge_enabled && this.digitFilterPasses(symbol)) {
-            this.in_flight.add(symbol);
-            this.placeHedge(symbol).finally(() => {
-                setTimeout(() => this.in_flight.delete(symbol), 2000);
-            });
+        if (this.config.mode === 'hedging') {
+            if (this.digitFilterPasses(symbol)) {
+                this.in_flight.add(symbol);
+                this.placeHedge(symbol).finally(() => {
+                    setTimeout(() => this.in_flight.delete(symbol), 2000);
+                });
+            }
             return;
         }
 
-        // Multi-strategy builder
+        // strategies mode
         for (const strat of this.config.strategies) {
             if (this.matchesStrategy(symbol, strat)) {
                 this.in_flight.add(symbol);
@@ -228,6 +293,14 @@ export class SmartHedgingEngine {
     private matchesStrategy(symbol: string, strat: TStrategy): boolean {
         const arr = this.tick_history[symbol] || [];
         if (arr.length < strat.last_n + 1) return false;
+        if (strat.condition === 'rise' || strat.condition === 'fall') {
+            const slice = arr.slice(-(strat.last_n + 1));
+            for (let i = 1; i < slice.length; i += 1) {
+                if (strat.condition === 'rise' && slice[i] <= slice[i - 1]) return false;
+                if (strat.condition === 'fall' && slice[i] >= slice[i - 1]) return false;
+            }
+            return true;
+        }
         const digits = this.digitsOf(symbol, strat.last_n);
         const checkDigit = (d: number) => {
             switch (strat.condition) {
@@ -243,29 +316,22 @@ export class SmartHedgingEngine {
                     return true;
             }
         };
-        if (strat.condition === 'rise' || strat.condition === 'fall') {
-            const slice = arr.slice(-(strat.last_n + 1));
-            for (let i = 1; i < slice.length; i += 1) {
-                if (strat.condition === 'rise' && slice[i] <= slice[i - 1]) return false;
-                if (strat.condition === 'fall' && slice[i] >= slice[i - 1]) return false;
-            }
-            return true;
-        }
         return digits.every(checkDigit);
     }
 
     private async placeHedge(symbol: string) {
         const stake = this.current_stake;
+        const group = `${symbol}_${Date.now()}`;
+        this.hedge_groups.set(group, { wins: 0, losses: 0, expected: 2 });
         await Promise.all([
-            this.buy(symbol, 'DIGITOVER', stake, { barrier: '5' }),
-            this.buy(symbol, 'DIGITUNDER', stake, { barrier: '4' }),
+            this.buy(symbol, 'DIGITOVER', stake, { barrier: '5' }, group),
+            this.buy(symbol, 'DIGITUNDER', stake, { barrier: '4' }, group),
         ]);
     }
 
     private async placeStrategyTrade(symbol: string, strat: TStrategy) {
         const stake = this.current_stake;
-        const action = strat.action;
-        switch (action) {
+        switch (strat.action) {
             case 'odd':
                 return this.buy(symbol, 'DIGITODD', stake);
             case 'even':
@@ -289,7 +355,8 @@ export class SmartHedgingEngine {
         symbol: string,
         contract_type: string,
         stake: number,
-        extra: Record<string, any> = {}
+        extra: Record<string, any> = {},
+        group?: string
     ) {
         try {
             const isDigit = contract_type.startsWith('DIGIT');
@@ -313,7 +380,7 @@ export class SmartHedgingEngine {
             });
             const contract_id = buyRes?.buy?.contract_id;
             if (contract_id) {
-                this.open_contracts.add(contract_id);
+                this.open_contracts.set(contract_id, { symbol, group });
                 this.emit({ type: 'trade', symbol, contract_type, stake });
             }
         } catch (err: any) {
