@@ -91,18 +91,63 @@ Preferred communication style: Simple, everyday language.
 - Bot XML files stored in `/public/bots/` directory
 - Files: `src/pages/free-bots/index.tsx`, `src/pages/free-bots/free-bots.scss`
 
-### Vercel deployment compatibility (April 2026)
-- Added `vercel.json` at the project root with the proper SPA config:
-  - `buildCommand: "npm run build"` and `outputDirectory: "dist"` match the existing Rsbuild pipeline.
-  - SPA rewrite (`/((?!.*\\.).*) → /index.html`) so client-side routes like `/dashboard`, `/auth/callback`, `/free-bots` resolve correctly under `createBrowserRouter`. The negative lookahead skips real static files (anything containing a `.`).
-  - Long-lived `Cache-Control` for `/static/*` (hashed assets) and a `no-cache` header for `/sw.js` so PWA updates roll out immediately.
-  - `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` set to `unsafe-none` to match the Rsbuild dev server config (required for the Deriv chart workers).
-- Required Vercel project env vars (Project Settings → Environment Variables):
-  - `VITE_APP_ID`
-  - `VITE_REDIRECT_URI` (e.g. `https://your-vercel-domain.com/auth/callback` — must also be registered on the Deriv app config)
-  - `VITE_OAUTH_URL` (`https://oauth.deriv.com/oauth2/authorize`)
-- Node version: `engines.node: 20.x` in `package.json` matches a Vercel-supported runtime.
-- The pre-existing `vercel.dr.json` is a Deriv-specific deploy descriptor and is ignored by Vercel (Vercel only reads `vercel.json`).
+### Portable Vercel deployment (April 2026)
+The project is fully portable — no Replit-specific code paths, no hardcoded
+URLs, all environment-driven. Push to GitHub, connect to Vercel, set env
+vars, deploy.
+
+**`vercel.json`** at project root:
+- `buildCommand: "npm run build"` and `outputDirectory: "dist"` match the Rsbuild pipeline.
+- SPA rewrite: `{ "source": "/(.*)", "destination": "/" }` — every unmatched path
+  resolves to `/` (index.html), which boots the `createBrowserRouter` so deep
+  links like `/dashboard`, `/auth/callback`, `/free-bots` work after refresh.
+  Vercel checks the filesystem first, so hashed static assets in `/static/*`
+  are still served directly.
+- `Cache-Control: public, max-age=31536000, immutable` for `/static/*` (the
+  bundler hashes these filenames, so they're safe to cache forever).
+- `Cache-Control: no-cache, no-store, must-revalidate` for `/sw.js` so PWA
+  updates roll out immediately.
+- COOP/COEP set to `unsafe-none` (matches the Rsbuild dev server, required by
+  the Deriv chart workers).
+
+**Environment variables** — set in **Vercel → Project Settings → Environment
+Variables** (apply to Production / Preview / Development as needed):
+
+| Variable | Production value |
+|---|---|
+| `VITE_APP_ID` | `111670` (or your own Deriv app id) |
+| `VITE_REDIRECT_URI` | `https://dollarfortunepro.vercel.app/auth/callback` |
+| `VITE_OAUTH_URL` | `https://oauth.deriv.com/oauth2/authorize` |
+
+The exact same three keys are required for local dev — see `.env.example`.
+
+**Local development outside Replit**:
+1. `git clone` the repo and `npm install`.
+2. Create `.env.development` at the repo root with:
+   ```
+   VITE_APP_ID=111670
+   VITE_REDIRECT_URI=http://localhost:3000/auth/callback
+   VITE_OAUTH_URL=https://oauth.deriv.com/oauth2/authorize
+   ```
+3. (Optional) Create `.env.production` for local production builds.
+4. `npm run start` — Rsbuild's `loadEnv()` automatically picks the right file
+   based on `NODE_ENV`. The dev server defaults to port 3000.
+
+`.env.development` and `.env.production` are intentionally **gitignored** —
+secrets/config never live in the repo. The repo only ships `.env.example`
+as a template.
+
+**Node version**: `engines.node: 20.x` in `package.json` matches Vercel's
+supported Node 20 runtime. Replit's container runs Node 20.20.0.
+
+**Other notes**:
+- `vercel.dr.json` is a Deriv-internal deploy descriptor that Vercel ignores
+  (it only reads `vercel.json`).
+- The OAuth login flow is fully click-driven (`window.location.href = url`,
+  full-page redirect — no popups, no iframes). See `src/auth/loginWithDeriv.ts`.
+- `auth.config.ts` reads only from `process.env.VITE_*` and throws at build
+  time if any required var is missing — no `window.location.origin`, no
+  `localhost` detection, no hardcoded URLs.
 
 ### Environment-driven Deriv OAuth (April 2026)
 - Removed all hardcoded auth values from the codebase. The OAuth flow is now driven entirely by environment variables.

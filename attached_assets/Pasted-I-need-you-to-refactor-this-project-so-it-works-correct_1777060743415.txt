@@ -1,0 +1,60 @@
+I need you to refactor this project so it works correctly outside the Replit environment when deployed to GitHub and Vercel.
+
+Right now the app works inside Replit, but after pushing to GitHub and deploying on Vercel, it fails to preview and login does not work correctly. I want a production-ready setup.
+
+Please do the following:
+
+1. Remove all Replit-specific dependencies and configurations:
+
+   * Remove any use of replit.dev URLs
+   * Remove any hardcoded localhost or 127.0.0.1 URLs
+   * Ensure no part of the app depends on Replit preview or iframe behavior
+
+2. Fix environment variable handling:
+
+   * Create `.env.development` and `.env.production`
+   * Use `import.meta.env` (or the correct method depending on the framework) to load environment variables
+   * Set:
+     VITE_REDIRECT_URI=http://localhost:3000/auth/callback (development)
+     VITE_REDIRECT_URI=https://dollarfortunepro.vercel.app/auth/callback (production)
+
+3. Fix OAuth login flow (Deriv API):
+
+   * Ensure login is triggered ONLY on button click (not on page load)
+   * Use full-page redirect:
+     window.location.href = loginUrl;
+   * Do NOT use iframes or popups for login
+   * Ensure redirect URI matches the production domain
+
+4. Make the app deployment-ready for Vercel:
+
+   * Ensure the build output is in `/dist`
+   * Add a `vercel.json` file with:
+     {
+     "rewrites": [
+     { "source": "/(.*)", "destination": "/" }
+     ]
+     }
+
+5. Clean the project:
+
+   * Remove unnecessary large files and unused dependencies
+   * Ensure `node_modules` is not included in deployment
+   * Fix any invalid or corrupted lockfile issues
+
+6. Ensure compatibility:
+
+   * Make sure the project works with Node.js 20+ (or specify required version properly)
+   * Remove or replace any dependency that requires unsupported Node versions
+
+7. Final verification:
+
+   * The app should:
+     ✔ Load correctly on Vercel
+     ✔ Not show “refused to preview”
+     ✔ Redirect correctly during login
+     ✔ Work without any Replit-specific behavior
+
+After making these changes, explain what was fixed and why.
+
+Do not break existing functionality — only refactor for portability and deployment stability.
