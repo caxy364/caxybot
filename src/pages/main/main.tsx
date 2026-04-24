@@ -407,14 +407,14 @@ const AppWrapper = observer(() => {
                                             width='24px'
                                             fill='var(--text-general)'
                                         />
-                                        <Localize i18n_default_text='Deriv Trader' />
+                                        <Localize i18n_default_text='Smart Fortune' />
                                     </>
                                 }
                                 id='id-deriv-trader'
                             >
                                 <Suspense
                                     fallback={
-                                        <ChunkLoader message={localize('Please wait, loading Deriv Trader...')} />
+                                        <ChunkLoader message={localize('Please wait, loading Smart Fortune...')} />
                                     }
                                 >
                                     <DerivTrader />
