@@ -36,9 +36,12 @@
     --text-align-center: center;
 
     // Brand primary colors
+    // NOTE: --brand-red-coral is the app's primary accent (active tab line,
+    // primary buttons, links, etc.). It was originally #ff444f (Deriv coral
+    // red) but has been re-themed to a friendly light green for this build.
     --brand-white: #{constants.$color-white};
     --brand-dark-grey: #{constants.$color-black};
-    --brand-red-coral: #{constants.$color-red};
+    --brand-red-coral: #4caf50;
     --brand-orange: #{constants.$color-orange};
 
     // Brand secondary colors
@@ -98,15 +101,15 @@
         --purchase-disabled-main: #{constants.$color-grey-3};
         --purchase-disabled-section: #{constants.$color-grey-4};
 
-        // Buttons
+        // Buttons (re-themed to the light-green brand)
         --button-primary-default: var(--brand-red-coral);
         --button-secondary-default: #{constants.$color-grey-1};
         --button-tertiary-default: transparent;
-        --button-primary-light-default: #{constants.$alpha-color-red-2};
-        --button-primary-hover: #{constants.$color-red-5};
+        --button-primary-light-default: rgba(76, 175, 80, 0.16);
+        --button-primary-hover: #43a047;
         --button-secondary-hover: #{constants.$alpha-color-black-3};
-        --button-tertiary-hover: #{constants.$alpha-color-red-1};
-        --button-primary-light-hover: #{constants.$alpha-color-red-3};
+        --button-tertiary-hover: rgba(76, 175, 80, 0.08);
+        --button-primary-light-hover: rgba(76, 175, 80, 0.24);
         --button-toggle-primary: #{constants.$color-blue-3};
         --button-toggle-secondary: #{constants.$color-grey-5};
         --button-toggle-alternate: #{constants.$color-white};
@@ -242,15 +245,15 @@
         --purchase-disabled-main: #{constants.$color-black-4};
         --purchase-disabled-section: #{constants.$color-black};
 
-        // Buttons
+        // Buttons (re-themed to the light-green brand)
         --button-primary-default: var(--brand-red-coral);
         --button-secondary-default: #{constants.$color-grey-7};
         --button-tertiary-default: transparent;
-        --button-primary-light-default: #{constants.$alpha-color-red-2};
-        --button-primary-hover: #{constants.$color-red-5};
+        --button-primary-light-default: rgba(76, 175, 80, 0.16);
+        --button-primary-hover: #43a047;
         --button-secondary-hover: #{constants.$alpha-color-white-3};
-        --button-tertiary-hover: #{constants.$alpha-color-red-1};
-        --button-primary-light-hover: #{constants.$alpha-color-red-3};
+        --button-tertiary-hover: rgba(76, 175, 80, 0.08);
+        --button-primary-light-hover: rgba(76, 175, 80, 0.24);
         --button-toggle-primary: #{constants.$color-blue-3};
         --button-toggle-secondary: #{constants.$color-black-8};
         --button-toggle-alternate: #{constants.$color-black-8};

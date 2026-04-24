@@ -219,8 +219,12 @@ const AppWrapper = observer(() => {
             const el_id = TAB_IDS[tab_index];
             if (el_id) {
                 const el_tab = document.getElementById(el_id);
+                // Use 'nearest' on both axes so the page never scrolls
+                // vertically (which caused a jarring "jump" on every tab
+                // click) and the tab only scrolls horizontally if it is
+                // off-screen in the scrollable tab strip.
                 setTimeout(() => {
-                    el_tab?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                    el_tab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
                 }, 10);
             }
         },
