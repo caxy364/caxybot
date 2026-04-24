@@ -766,3 +766,44 @@
 .main .dc-tabs__list {
     justify-content: flex-start !important;
 }
+
+/* Light green modern accent — scoped to the main horizontal nav only */
+.main .main__tabs {
+    --nav-accent: #22c55e;
+    --nav-accent-soft: rgba(34, 197, 94, 0.12);
+    --nav-accent-softer: rgba(34, 197, 94, 0.06);
+
+    .dc-tabs__active-line {
+        background-color: var(--nav-accent) !important;
+        height: 3px;
+        border-radius: 3px 3px 0 0;
+        box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+    }
+
+    .dc-tabs__item {
+        transition: background-color 0.2s ease, color 0.2s ease;
+        cursor: pointer;
+
+        svg path {
+            transition: fill 0.2s ease;
+        }
+
+        &:hover:not(.dc-tabs__active) {
+            background-color: var(--nav-accent-softer);
+            color: var(--nav-accent);
+
+            svg path {
+                fill: var(--nav-accent);
+            }
+        }
+    }
+
+    .dc-tabs__active {
+        color: var(--nav-accent) !important;
+        background: var(--nav-accent-soft) !important;
+
+        svg path {
+            fill: var(--nav-accent) !important;
+        }
+    }
+}
