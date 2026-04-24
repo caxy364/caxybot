@@ -91,6 +91,19 @@ Preferred communication style: Simple, everyday language.
 - Bot XML files stored in `/public/bots/` directory
 - Files: `src/pages/free-bots/index.tsx`, `src/pages/free-bots/free-bots.scss`
 
+### Vercel deployment compatibility (April 2026)
+- Added `vercel.json` at the project root with the proper SPA config:
+  - `buildCommand: "npm run build"` and `outputDirectory: "dist"` match the existing Rsbuild pipeline.
+  - SPA rewrite (`/((?!.*\\.).*) → /index.html`) so client-side routes like `/dashboard`, `/auth/callback`, `/free-bots` resolve correctly under `createBrowserRouter`. The negative lookahead skips real static files (anything containing a `.`).
+  - Long-lived `Cache-Control` for `/static/*` (hashed assets) and a `no-cache` header for `/sw.js` so PWA updates roll out immediately.
+  - `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` set to `unsafe-none` to match the Rsbuild dev server config (required for the Deriv chart workers).
+- Required Vercel project env vars (Project Settings → Environment Variables):
+  - `VITE_APP_ID`
+  - `VITE_REDIRECT_URI` (e.g. `https://your-vercel-domain.com/auth/callback` — must also be registered on the Deriv app config)
+  - `VITE_OAUTH_URL` (`https://oauth.deriv.com/oauth2/authorize`)
+- Node version: `engines.node: 20.x` in `package.json` matches a Vercel-supported runtime.
+- The pre-existing `vercel.dr.json` is a Deriv-specific deploy descriptor and is ignored by Vercel (Vercel only reads `vercel.json`).
+
 ### Environment-driven Deriv OAuth (April 2026)
 - Removed all hardcoded auth values from the codebase. The OAuth flow is now driven entirely by environment variables.
 - Required env vars (set per environment, no code changes needed to switch):
