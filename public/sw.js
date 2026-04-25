@@ -1,5 +1,11 @@
 // Comprehensive Service Worker for Deriv Bot Offline Functionality
-const CACHE_NAME = 'deriv-bot-v1';
+//
+// IMPORTANT: bump CACHE_NAME on every breaking auth/bundle change so old
+// caches are deleted in the `activate` handler and every returning user
+// is forced onto the new bundle. Otherwise users keep seeing the old
+// pre-fix code (and the OAuth callback silently fails because they're
+// running the old earlyAuth-less main.tsx).
+const CACHE_NAME = 'deriv-bot-v3-auth-fix';
 const OFFLINE_URL = '/offline.html';
 
 // Files to cache immediately on install
@@ -113,6 +119,19 @@ self.addEventListener('fetch', event => {
         url.pathname.startsWith('/authorize')
     ) {
         console.log('[SW] Hard-skipping protected auth path:', url.pathname);
+        return;
+    }
+
+    // CRITICAL: when Deriv redirects back with OAuth tokens on the root URL
+    // (e.g. /?acct1=…&token1=…&cur1=…) the page MUST hit network so the
+    // freshly-deployed earlyAuth handler runs. Serving a cached HTML here
+    // can result in old JS running and tokens silently dropped.
+    if (
+        url.searchParams.has('acct1') ||
+        url.searchParams.has('token1') ||
+        url.searchParams.has('token')
+    ) {
+        console.log('[SW] Hard-skipping OAuth callback URL with tokens');
         return;
     }
 

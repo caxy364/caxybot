@@ -67,7 +67,22 @@ class PWAManager {
         try {
             const registration = await navigator.serviceWorker.register('/sw.js', {
                 scope: '/',
+                // Bypass HTTP cache when fetching the SW script itself so a
+                // newly-deployed sw.js is always picked up on next visit
+                // instead of being served from the browser disk cache.
+                updateViaCache: 'none',
             });
+
+            // Force an update check on every page load — without this the
+            // browser only checks for a new sw.js every 24h, which means
+            // returning users keep running the old SW (and the old cached
+            // bundle) for up to a day after a deploy.
+            try {
+                await registration.update();
+            } catch (e) {
+                // eslint-disable-next-line no-console
+                console.warn('[PWA] SW update check failed (non-fatal):', e);
+            }
 
             // Listen for updates
             registration.addEventListener('updatefound', () => {
