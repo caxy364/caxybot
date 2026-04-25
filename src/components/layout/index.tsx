@@ -142,24 +142,6 @@ const Layout = observer(() => {
             sessionStorage.setItem('query_param_currency', currency);
         }
 
-        // SAFETY NET — never bounce the user back to login when:
-        //   * a Deriv session is already in storage (early auth handler ran), or
-        //   * OAuth callback tokens are still present on the URL (early auth
-        //     about to fire). This prevents the redirect-loop the spec calls out.
-        const hasSession = hasDerivSession();
-        const hasCallbackTokens = hasOauthCallbackParams();
-
-        const checkOIDCEnabledWithMissingAccount =
-            !isEndpointPage && !isCallbackPage && !clientHasCurrency && !hasSession && !hasCallbackTokens;
-        const shouldAuthenticate =
-            (isLoggedInCookie &&
-                !isClientAccountsPopulated &&
-                !isEndpointPage &&
-                !isCallbackPage &&
-                !hasSession &&
-                !hasCallbackTokens) ||
-            checkOIDCEnabledWithMissingAccount;
-
         // Skip authentication when offline
         if (!isOnline) {
             console.log('[Layout] Offline detected, skipping authentication');
@@ -168,12 +150,54 @@ const Layout = observer(() => {
             return;
         }
 
-        // Create an async IIFE to handle authentication
-        (async () => {
+        // Race-safety delay (per spec 200–500ms). Lets earlyAuth + any other
+        // synchronous on-load storage writes settle before we read the
+        // session state. If the effect re-runs during the delay we cancel.
+        const cancelTimer = { cancelled: false };
+        const timer = setTimeout(async () => {
+            if (cancelTimer.cancelled) return;
+
+            // Re-read storage AFTER the delay so we see the values that
+            // earlyAuth wrote on the (possibly very recent) page load.
+            const hasSession = hasDerivSession();
+            const hasCallbackTokens = hasOauthCallbackParams();
+            const liveAccountsList = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
+            const liveIsClientAccountsPopulated = Object.keys(liveAccountsList).length > 0;
+
+            // SAFETY NET — never bounce the user back to login when:
+            //   * a Deriv session is already in storage (early auth ran), or
+            //   * OAuth callback tokens are still present on the URL (early auth
+            //     is about to fire). This prevents the redirect-loop.
+            const checkOIDCEnabledWithMissingAccount =
+                !isEndpointPage && !isCallbackPage && !clientHasCurrency && !hasSession && !hasCallbackTokens;
+            const shouldAuthenticate =
+                (isLoggedInCookie &&
+                    !liveIsClientAccountsPopulated &&
+                    !isEndpointPage &&
+                    !isCallbackPage &&
+                    !hasSession &&
+                    !hasCallbackTokens) ||
+                checkOIDCEnabledWithMissingAccount;
+
+            // eslint-disable-next-line no-console
+            console.log('[Layout] auth-guard decision', {
+                hasSession,
+                hasCallbackTokens,
+                liveIsClientAccountsPopulated,
+                isLoggedInCookie,
+                clientHasCurrency,
+                isEndpointPage,
+                isCallbackPage,
+                shouldAuthenticate,
+                deriv_token_local: Boolean(localStorage.getItem('deriv_token') || localStorage.getItem('authToken')),
+                deriv_token_session: Boolean(sessionStorage.getItem('deriv_token')),
+            });
+
             try {
                 // First, explicitly wait for TMB status to be determined
                 // This ensures we have the correct TMB status before proceeding
                 const tmbEnabled = await isTmbEnabled();
+                if (cancelTimer.cancelled) return;
 
                 // Now use the result of the explicit check
                 if (tmbEnabled) {
@@ -185,17 +209,22 @@ const Layout = observer(() => {
                     if (query_param_currency) {
                         sessionStorage.setItem('query_param_currency', query_param_currency);
                     }
-                    // Manual Deriv OAuth: stable redirect, no localhost / origin fallback.
+                    // eslint-disable-next-line no-console
+                    console.log('[Layout] no session detected — redirecting to Deriv OAuth');
                     loginWithDeriv({ account: query_param_currency });
                 }
             } catch (err) {
                 // eslint-disable-next-line no-console
-                setIsAuthenticating(false);
                 console.error('Authentication error:', err);
             } finally {
-                setIsAuthenticating(false);
+                if (!cancelTimer.cancelled) setIsAuthenticating(false);
             }
-        })();
+        }, 350);
+
+        return () => {
+            cancelTimer.cancelled = true;
+            clearTimeout(timer);
+        };
     }, [
         isLoggedInCookie,
         isClientAccountsPopulated,

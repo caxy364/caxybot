@@ -1,0 +1,61 @@
+Fix my Deriv OAuth authentication system completely. The OAuth redirect is already working and tokens (acct1, token1, etc.) are successfully returned to my production URL `https://derivfortunepro.vercel.app/`, but the app immediately loses the session and redirects back to login instead of proceeding to the dashboard and showing the balance.
+
+Context:
+
+* This is a React + Vite app deployed on Vercel
+* Replit is ONLY used for development, not production
+* The redirect URI is correctly registered in Deriv and must remain: `https://derivfortunepro.vercel.app/`
+* Tokens appear briefly in the URL, then disappear, and the app behaves as if the user is not logged in
+* An earlyAuth handler already exists but the session is not persisting correctly
+* There is likely a race condition or storage mismatch
+
+Your task:
+
+1. Implement a robust global early authentication handler that runs BEFORE React mounts
+2. It must:
+
+   * Parse all `acct*`, `token*`, and `cur*` parameters from the URL
+   * Support multiple accounts (acct1, acct2, etc.)
+   * Store session data consistently in BOTH `sessionStorage` and `localStorage`
+   * Use consistent keys: `deriv_token`, `deriv_account`, `deriv_accounts`
+   * Also populate any legacy keys if needed (`authToken`, `active_loginid`, etc.)
+3. Clean the URL safely using `window.history.replaceState` WITHOUT losing session state
+4. Redirect to `/dashboard` using `window.location.replace`
+5. Ensure React does NOT render before this logic completes if tokens are present
+
+Then:
+6. Fix the AuthGuard / Layout logic:
+
+* It must check BOTH sessionStorage and localStorage for `deriv_token`
+* It must NOT trigger login if a token exists
+* It must NOT trigger login if OAuth params are still present in the URL
+* Add a small delay (200–500ms) to prevent race conditions
+
+7. Remove or prevent any logic that clears storage on load (`localStorage.clear`, etc.)
+
+8. Add debug logs:
+
+   * Log when tokens are captured
+   * Log stored values
+   * Log what AuthGuard reads before deciding to redirect
+
+Goal:
+
+* After login, the user should stay authenticated
+* The app should NOT redirect back to Deriv login
+* The dashboard should load and show account balance correctly
+* The system must be stable in production (Vercel)
+
+Important:
+
+* Do NOT change the redirect URI
+* Do NOT rely on window.location.origin for OAuth config
+* Focus only on fixing session persistence and auth flow
+
+Return:
+
+* Clean, production-ready code for:
+
+  * earlyAuth.ts
+  * main.tsx integration
+  * AuthGuard / Layout fix

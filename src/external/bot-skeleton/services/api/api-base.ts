@@ -172,7 +172,13 @@ class APIBase {
                     if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled) {
                         globalObserver.emit('InvalidToken', { error });
                     } else {
-                        clearAuthData();
+                        // Don't auto-wipe a freshly-captured OAuth session on the
+                        // first authorize-on-boot (clearAuthData() applies its own
+                        // grace period). Just emit so any UI can react and the
+                        // user can retry login manually.
+                        // eslint-disable-next-line no-console
+                        console.warn('[api-base] InvalidToken on authorize — not auto-clearing session', error);
+                        globalObserver.emit('InvalidToken', { error });
                     }
                 } else {
                     console.error('Authorization error:', error);
@@ -197,9 +203,12 @@ class APIBase {
             this.subscribe();
             // this.getSelfExclusion(); commented this so we dont call it from two places
         } catch (e) {
-            console.error('Authorization failed:', e);
+            // Transient WebSocket / network errors must NOT wipe the session
+            // — that was the source of the production "tokens disappear after
+            // login" bug. Keep storage intact so the user can retry; UI can
+            // listen for 'Error' to surface a banner.
+            console.error('[api-base] Authorization threw — keeping session intact:', e);
             this.is_authorized = false;
-            clearAuthData();
             setIsAuthorized(false);
             globalObserver.emit('Error', e);
         } finally {
