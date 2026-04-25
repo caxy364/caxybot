@@ -91,6 +91,37 @@ Preferred communication style: Simple, everyday language.
 - Bot XML files stored in `/public/bots/` directory
 - Files: `src/pages/free-bots/index.tsx`, `src/pages/free-bots/free-bots.scss`
 
+### Truly portable build (April 2026 — second pass)
+The first refactor missed three real portability traps that broke the app
+on Vercel/GitHub Pages/Netlify. Fixed:
+
+1. **`auth.config.ts` no longer throws at module-import time.** It used to
+   call `requireEnv()` at the top of the module, which crashed the entire
+   bundle (white screen) if any of `VITE_APP_ID` / `VITE_REDIRECT_URI` /
+   `VITE_OAUTH_URL` were missing on the host. Now it provides safe public
+   defaults (`VITE_APP_ID=111670`, the public Deriv OAuth endpoint) and
+   resolves the redirect URI lazily.
+
+2. **Redirect URI is now derived from `window.location.origin` at click
+   time** — never from a build-time env var. Reason: Rsbuild's `define`
+   plugin string-replaces `process.env.VITE_REDIRECT_URI` at build time,
+   so a bundle built on Replit shipped the Replit URL into production.
+   Now the same `dist/` works on Replit, Vercel (preview + prod), Netlify,
+   GitHub Pages, and custom domains with zero env config — Deriv always
+   sends the user back to whichever host they came from. The
+   `VITE_REDIRECT_URI` injection has been removed from `rsbuild.config.ts`
+   to guarantee the value can never leak into the bundle.
+
+3. **`brand.ts` `isDomainAllowed` now allows every host.** The upstream
+   Deriv check whitelisted only `deriv.com` / `binary.com` / `pages.dev`,
+   which stripped platform icons on `vercel.app` etc. and made the UI
+   look broken on third-party hosts.
+
+**To deploy on Deriv's side**: register your deployment origin (e.g.
+`https://yoursite.vercel.app/auth/callback`) on the Deriv app id once
+(https://app.deriv.com/account/api-token → your app → Edit → Redirect URI).
+That's the only manual step.
+
 ### Portable Vercel deployment (April 2026)
 The project is fully portable — no Replit-specific code paths, no hardcoded
 URLs, all environment-driven. Push to GitHub, connect to Vercel, set env

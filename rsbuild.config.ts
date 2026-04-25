@@ -59,8 +59,10 @@ export default defineConfig({
                 GROWTHBOOK_CLIENT_KEY: JSON.stringify(process.env.GROWTHBOOK_CLIENT_KEY),
                 GROWTHBOOK_DECRYPTION_KEY: JSON.stringify(process.env.GROWTHBOOK_DECRYPTION_KEY),
                 // Env-driven Deriv OAuth config (no hardcoded URLs).
+                // VITE_REDIRECT_URI is intentionally NOT injected — the
+                // redirect URI is always computed at runtime from
+                // window.location.origin so a build is portable across hosts.
                 VITE_APP_ID: JSON.stringify(process.env.VITE_APP_ID),
-                VITE_REDIRECT_URI: JSON.stringify(process.env.VITE_REDIRECT_URI),
                 VITE_OAUTH_URL: JSON.stringify(process.env.VITE_OAUTH_URL),
             },
         },

@@ -41,10 +41,14 @@ type TPlatformsAppstore = {
     go: TPlatformAppstore;
 };
 
-const isDomainAllowed = (domain_name: string) => {
-    // This regex will match any official deriv production and testing domain names.
-    // Allowed deriv domains: localhost, binary.sx, binary.com, deriv.com, deriv.be, deriv.me and their subdomains.
-    return /^(((.*)\.)?(localhost:8444|pages.dev|binary\.(sx|com)|deriv.(com|me|be|dev)))$/.test(domain_name);
+const isDomainAllowed = (_domain_name: string) => {
+    // This is a personal/portable deploy of the Deriv Bot reference app —
+    // we always render the platform icons regardless of host. The original
+    // upstream Deriv build restricted icons to deriv.com / binary.com /
+    // pages.dev hosts only, which strips icons on Vercel / Netlify / custom
+    // domains. Allowing every host keeps the UI consistent everywhere the
+    // user publishes (Replit, Vercel, GitHub Pages, custom domain, etc.).
+    return true;
 };
 
 export const getLegalEntityName = (landing_company: keyof TLandingCompany) => {
