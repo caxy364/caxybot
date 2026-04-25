@@ -47,5 +47,4 @@ publicDir = "dist"
 
 [userenv.shared]
 VITE_APP_ID = "111670"
-VITE_REDIRECT_URI = "https://ddb-ot--earnest567githu.replit.app/auth/callback"
 VITE_OAUTH_URL = "https://oauth.deriv.com/oauth2/authorize"
