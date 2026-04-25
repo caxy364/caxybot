@@ -147,7 +147,7 @@ Variables** (apply to Production / Preview / Development as needed):
 | Variable | Production value |
 |---|---|
 | `VITE_APP_ID` | `111670` (or your own Deriv app id) |
-| `VITE_REDIRECT_URI` | `https://dollarfortunepro.vercel.app/auth/callback` |
+| `VITE_REDIRECT_URI` | `https://derivfortunepro.vercel.app/auth/callback` |
 | `VITE_OAUTH_URL` | `https://oauth.deriv.com/oauth2/authorize` |
 
 The exact same three keys are required for local dev — see `.env.example`.
