@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import Cookies from 'js-cookie';
 import { observer } from 'mobx-react-lite';
 import { Outlet } from 'react-router-dom';
+import { hasDerivSession, hasOauthCallbackParams } from '@/auth/earlyAuth';
 import { loginWithDeriv } from '@/auth/loginWithDeriv';
 import PWAUpdateNotification from '@/components/pwa-update-notification';
 import { api_base } from '@/external/bot-skeleton';
@@ -141,9 +142,22 @@ const Layout = observer(() => {
             sessionStorage.setItem('query_param_currency', currency);
         }
 
-        const checkOIDCEnabledWithMissingAccount = !isEndpointPage && !isCallbackPage && !clientHasCurrency;
+        // SAFETY NET — never bounce the user back to login when:
+        //   * a Deriv session is already in storage (early auth handler ran), or
+        //   * OAuth callback tokens are still present on the URL (early auth
+        //     about to fire). This prevents the redirect-loop the spec calls out.
+        const hasSession = hasDerivSession();
+        const hasCallbackTokens = hasOauthCallbackParams();
+
+        const checkOIDCEnabledWithMissingAccount =
+            !isEndpointPage && !isCallbackPage && !clientHasCurrency && !hasSession && !hasCallbackTokens;
         const shouldAuthenticate =
-            (isLoggedInCookie && !isClientAccountsPopulated && !isEndpointPage && !isCallbackPage) ||
+            (isLoggedInCookie &&
+                !isClientAccountsPopulated &&
+                !isEndpointPage &&
+                !isCallbackPage &&
+                !hasSession &&
+                !hasCallbackTokens) ||
             checkOIDCEnabledWithMissingAccount;
 
         // Skip authentication when offline

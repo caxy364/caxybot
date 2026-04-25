@@ -1,0 +1,65 @@
+Fix my Deriv OAuth authentication system. The current issue is that valid OAuth callback URLs with acct1, token1, cur1 parameters are being received correctly, but the app is incorrectly redirecting users back to the login page instead of processing the session.
+
+CURRENT PROBLEM:
+
+* OAuth redirect works and returns valid URL like:
+  https://derivfortunepro.vercel.app/?acct1=...&token1=...&cur1=USD
+* BUT the app immediately redirects back to login
+* This means token parsing is happening too late OR session validation is overriding it
+
+GOAL:
+Build a correct authentication flow where OAuth callback is ALWAYS processed before any login redirect logic runs.
+
+REQUIREMENTS:
+
+1. CREATE A GLOBAL EARLY AUTH HANDLER (VERY IMPORTANT)
+
+* Runs immediately on app load BEFORE any routing or guards
+* Checks window.location.search for acct1 and token1
+* If tokens exist:
+
+  * Parse ALL accounts (acct1, acct2, token1, token2, cur1, cur2, etc.)
+  * Store in sessionStorage:
+
+    * deriv_accounts (full array)
+    * deriv_token (primary token1)
+    * deriv_account (primary acct1)
+  * Clean URL using window.history.replaceState
+  * Redirect to /dashboard immediately
+
+2. FIX AUTH GUARDS
+
+* DO NOT redirect to login if URL contains OAuth tokens
+* Only redirect to login if:
+
+  * no sessionStorage token exists
+  * AND no OAuth callback parameters exist
+
+3. STOP PREMATURE REDIRECT LOOP
+
+* Remove or modify any logic that runs:
+  if (!sessionStorage.getItem('deriv_token')) redirect('/')
+* It must NOT run before OAuth parsing completes
+
+4. LOGIN FLOW MUST BE:
+   Login Button → Deriv OAuth → Redirect to app with tokens → GLOBAL HANDLER parses → session saved → /dashboard
+
+5. REMOVE ALL CONFLICTING LOGIC:
+
+* No double login triggers
+* No redirect loops
+* No window.location.origin usage
+* No SDK-based auth (@deriv-com/auth-client must not control redirects)
+
+6. ENSURE CALLBACK WORKS ON ROOT URL:
+
+* OAuth returns to:
+  https://derivfortunepro.vercel.app/?acct1=...&token1=...
+* This must still be treated as valid login response
+
+FINAL RESULT:
+
+* Users log in once via Deriv
+* Tokens are captured immediately on page load
+* No redirect back to login after successful authentication
+* Stable session across refresh and navigation
