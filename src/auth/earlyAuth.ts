@@ -128,6 +128,15 @@ export const runEarlyAuth = (): boolean => {
 
         persistSession(accounts);
 
+        // OAuth round-trip succeeded — clear the throttle stamp so any
+        // future legitimate logout-then-login isn't blocked by the
+        // 30s "duplicate authorize" guard in loginWithDeriv.
+        try {
+            sessionStorage.removeItem('deriv_last_oauth_attempt_at');
+        } catch {
+            /* noop */
+        }
+
         // eslint-disable-next-line no-console
         console.log('[earlyAuth] session persisted', {
             primary_account: accounts[0].account,

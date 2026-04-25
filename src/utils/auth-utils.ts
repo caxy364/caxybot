@@ -59,6 +59,7 @@ export const clearAuthData = (is_reload: boolean = true, options?: { force?: boo
     sessionStorage.removeItem('deriv_token');
     sessionStorage.removeItem('deriv_account');
     sessionStorage.removeItem('deriv_accounts');
+    sessionStorage.removeItem('deriv_last_oauth_attempt_at');
 
     if (is_reload) {
         location.reload();
