@@ -22,7 +22,12 @@ const Layout = observer(() => {
     const store = useStore();
     const is_quick_strategy_active = store?.quick_strategy?.is_open;
 
-    const isCallbackPage = window.location.pathname === '/callback';
+    // /auth/callback is the canonical OAuth handler. /callback is kept here
+    // only so the layout doesn't briefly render auth UI for users who hit a
+    // stale bookmark before the router redirects them to /auth/callback.
+    const isCallbackPage =
+        window.location.pathname === '/auth/callback' ||
+        window.location.pathname === '/callback';
     const { onRenderTMBCheck, is_tmb_enabled: tmb_enabled_from_hook, isTmbEnabled } = useTMB();
     const is_tmb_enabled = useMemo(
         () => window.is_tmb_enabled === true || tmb_enabled_from_hook,
