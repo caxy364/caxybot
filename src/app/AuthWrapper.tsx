@@ -38,6 +38,32 @@ const setLocalStorageToken = async (
             localStorage.setItem('accountsList', JSON.stringify(accountsList));
             localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts));
 
+            // Spec-mandated storage keys (deriv_token / deriv_account /
+            // deriv_accounts) mirrored to BOTH localStorage and
+            // sessionStorage. These run ALONGSIDE the legacy
+            // accountsList/clientAccounts/authToken/active_loginid keys
+            // above — neither is removed, so the bot builder, charts,
+            // and account switcher continue to work unchanged.
+            const derivAccounts = loginInfo.map(a => ({
+                account: a.loginid,
+                token: a.token,
+                currency: a.currency,
+            }));
+            const primary = {
+                account: defaultActiveAccount.loginid,
+                token: defaultActiveAccount.token,
+            };
+            try {
+                localStorage.setItem('deriv_accounts', JSON.stringify(derivAccounts));
+                localStorage.setItem('deriv_token', primary.token);
+                localStorage.setItem('deriv_account', primary.account);
+                sessionStorage.setItem('deriv_accounts', JSON.stringify(derivAccounts));
+                sessionStorage.setItem('deriv_token', primary.token);
+                sessionStorage.setItem('deriv_account', primary.account);
+            } catch (storageErr) {
+                console.warn('[Auth] Failed to mirror tokens to deriv_* keys:', storageErr);
+            }
+
             URLUtils.filterSearchParams(paramsToDelete);
 
             // Skip API connection when offline

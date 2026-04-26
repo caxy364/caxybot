@@ -19,7 +19,12 @@
 
 const DEFAULT_APP_ID = '111670';
 const DEFAULT_OAUTH_URL = 'https://oauth.deriv.com/oauth2/authorize';
-const DEFAULT_REDIRECT_URI = 'https://derivfortunepro.vercel.app/auth/callback';
+// Must EXACTLY match the redirect URL registered on the Deriv app
+// dashboard (id 111670). Deriv rejects any other value, which results
+// in the user being bounced back without `acct1/token1/cur1` query
+// params — i.e. "the URL is not carrying the access token". The
+// registered URL is the site root.
+const DEFAULT_REDIRECT_URI = 'https://derivfortunepro.vercel.app/';
 
 const readEnv = (name: string): string | undefined => {
     // process.env.VITE_* is replaced at build time by Rsbuild's `define`.
