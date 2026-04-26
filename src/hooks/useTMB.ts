@@ -50,12 +50,9 @@ const useTMB = (): UseTMBReturn => {
     }
 
     // const isEndpointPage = useMemo(() => window.location.pathname.includes('endpoint'), []);
-    const isCallbackPage = useMemo(
-        () =>
-            window.location.pathname === '/auth/callback' ||
-            window.location.pathname === '/callback',
-        []
-    );
+    // OAuth tokens are captured by runEarlyAuth() before React mounts
+    // (see src/main.tsx); there is no callback route any more.
+    const isCallbackPage = useMemo(() => false, []);
     const domains = useMemo(
         () => ['deriv.com', 'deriv.dev', 'binary.sx', 'pages.dev', 'localhost', 'deriv.be', 'deriv.me'],
         []

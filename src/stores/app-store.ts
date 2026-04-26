@@ -89,12 +89,14 @@ export default class AppStore {
         // Check if we're in the process of logging in
         // When isSingleLoggingIn is true, we don't want to show the EU error message
         const is_tmb_enabled = window.is_tmb_enabled === true;
+        // OAuth tokens are captured by runEarlyAuth() before React
+        // mounts (see src/main.tsx); there is no callback route.
+        // We're "logging in" only when the cookie says we're logged in
+        // but the app hasn't yet finished writing the accounts list.
         const isSingleLoggingIn =
-            window.location.pathname === '/auth/callback' ||
-            window.location.pathname === '/callback' ||
-            (Cookies.get('logged_state') === 'true' &&
-                !is_tmb_enabled &&
-                Object.keys(JSON.parse(localStorage.getItem('accountsList') || '{}')).length === 0);
+            Cookies.get('logged_state') === 'true' &&
+            !is_tmb_enabled &&
+            Object.keys(JSON.parse(localStorage.getItem('accountsList') || '{}')).length === 0;
 
         if (isSingleLoggingIn) {
             common.setError(false, {});

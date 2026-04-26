@@ -7,7 +7,6 @@ import RoutePromptDialog from '@/components/route-prompt-dialog';
 import { crypto_currencies_display_order, fiat_currencies_display_order } from '@/components/shared';
 import { useOfflineDetection } from '@/hooks/useOfflineDetection';
 import { StoreProvider } from '@/hooks/useStore';
-import AuthCallbackPage from '@/pages/auth-callback';
 import Endpoint from '@/pages/endpoint';
 import { TAuthData } from '@/types/api-types';
 import { initializeI18n, localize, TranslationProvider } from '@deriv-com/translations';
@@ -57,13 +56,9 @@ const router = createBrowserRouter(
             <Route index element={<AppRoot />} />
             <Route path='dashboard' element={<Navigate to='/' replace />} />
             <Route path='endpoint' element={<Endpoint />} />
-            {/* /auth/callback is the ONLY route that processes OAuth tokens.
-                The legacy /callback OIDC handler has been removed so there is
-                exactly one authentication entry point. */}
-            <Route path='auth/callback' element={<AuthCallbackPage />} />
-            {/* Legacy /callback path → forward to canonical handler so any
-                stale bookmark / external link still lands on the right page. */}
-            <Route path='callback' element={<Navigate to='/auth/callback' replace />} />
+            {/* OAuth callback handling has moved out of routing entirely.
+                Tokens arrive on the site root and are captured by
+                runEarlyAuth() before React mounts (see src/main.tsx). */}
             <Route path='free-bots' element={<FreeBots />} />
             <Route path='analysis-tool' element={<AnalysisTool />} />
         </Route>

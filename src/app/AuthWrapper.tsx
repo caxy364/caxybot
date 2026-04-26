@@ -4,7 +4,6 @@ import ChunkLoader from '@/components/loader/chunk-loader';
 import { generateDerivApiInstance } from '@/external/bot-skeleton/services/api/appId';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import { useOfflineDetection } from '@/hooks/useOfflineDetection';
-import { clearAuthData } from '@/utils/auth-utils';
 import { localize } from '@deriv-com/translations';
 import { URLUtils } from '@deriv-com/utils';
 import App from './App';
@@ -93,10 +92,10 @@ const setLocalStorageToken = async (
                                 globalObserver.emit('InvalidToken', { error });
                             }
 
-                            if (Cookies.get('logged_state') === 'false') {
-                                // If the user is not logged out, we need to clear the local storage
-                                clearAuthData();
-                            }
+                            // Spec rule: do NOT clear auth storage on
+                            // initial load. earlyAuth() in main.tsx is
+                            // the single source of truth for token
+                            // persistence — wiping here would undo it.
                         }
                     } else {
                         localStorage.setItem('client.country', authorize.country);

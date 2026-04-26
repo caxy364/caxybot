@@ -1,0 +1,99 @@
+I want to rebuild the authentication system from scratch using a clean and stable architecture based strictly on Deriv OAuth.
+
+IMPORTANT RULES:
+
+* Do NOT modify UI, styling, routing, or unrelated logic
+* Do NOT introduce new features
+* Focus ONLY on authentication
+* Keep the solution simple, deterministic, and production-safe
+
+AUTH ARCHITECTURE REQUIREMENTS:
+
+1. SINGLE SOURCE OF TRUTH
+
+* Use ONLY one redirect URI:
+  https://derivfortunepro.vercel.app/
+* Remove ALL references to `/auth/callback` or any other redirect path
+* Ensure this EXACT URL matches the Deriv dashboard
+
+2. EARLY TOKEN CAPTURE (CRITICAL)
+
+* Implement an `earlyAuth()` function that runs BEFORE React or app initialization
+* It must:
+
+  * Read URL params: acct1, token1, cur1, acct2, token2, etc.
+  * Convert them into an array of accounts
+  * Store them immediately in localStorage under:
+
+    * deriv_accounts
+    * deriv_token (primary)
+    * deriv_account (primary)
+  * Clean the URL using:
+    window.history.replaceState({}, document.title, "/")
+
+3. TOKEN STORAGE FORMAT
+   Store as:
+   [
+   { account: "CR123", token: "a1-xxx", currency: "USD" }
+   ]
+
+4. AUTHORIZE VIA WEBSOCKET
+
+* After earlyAuth, initialize a WebSocket connection:
+  wss://ws.derivws.com/websockets/v3?app_id=111670
+* Send:
+  { "authorize": "<token>" }
+* On success:
+
+  * Store response in localStorage as `deriv_auth`
+  * This is the logged-in session
+
+5. SESSION PERSISTENCE
+
+* On app load:
+
+  * Check `deriv_auth`
+  * If present → user is logged in
+  * If absent → show login
+
+6. REMOVE CONFLICTING LOGIC
+
+* Remove:
+
+  * clearAuthData() on initial load
+  * URLUtils.filterSearchParams BEFORE token storage
+  * Multiple redirect URI definitions
+  * Any service worker or caching logic affecting auth
+  * Any duplicate auth handlers
+
+7. LOGIN BUTTON
+   Use ONLY:
+   https://oauth.deriv.com/oauth2/authorize?app_id=111670&redirect_uri=https://derivfortunepro.vercel.app/
+
+8. NO RACE CONDITIONS
+
+* earlyAuth must run BEFORE:
+
+  * React renders
+  * Any auth clearing logic
+  * Any API calls
+
+9. DEBUG LOGS (TEMPORARY)
+   Add logs:
+
+* "[AUTH] Tokens captured"
+* "[AUTH] Stored successfully"
+* "[AUTH] Authorizing..."
+* "[AUTH] Authorized"
+
+GOAL:
+After clicking "Continue" on Deriv OAuth:
+
+* URL must contain tokens
+* Tokens must be captured immediately
+* WebSocket authorize must succeed
+* User must remain logged in (no return to login screen)
+
+Do NOT refactor anything outside authentication.
+Do NOT touch unrelated files.
+Fix ONLY auth flow end-to-end.

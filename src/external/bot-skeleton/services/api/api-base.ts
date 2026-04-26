@@ -1,7 +1,6 @@
 import Cookies from 'js-cookie';
 import CommonStore from '@/stores/common-store';
 import { TAuthData } from '@/types/api-types';
-import { clearAuthData } from '@/utils/auth-utils';
 import { observer as globalObserver } from '../../utils/observer';
 import { doUntilDone, socket_state } from '../tradeEngine/utils/helpers';
 import {
@@ -171,9 +170,11 @@ class APIBase {
                     const is_tmb_enabled = window.is_tmb_enabled === true;
                     if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled) {
                         globalObserver.emit('InvalidToken', { error });
-                    } else {
-                        clearAuthData();
                     }
+                    // Spec rule: NEVER call clearAuthData() on the
+                    // initial authorize attempt. The token is the
+                    // single source of truth — surface the error,
+                    // don't wipe storage.
                 } else {
                     console.error('Authorization error:', error);
                 }
@@ -199,7 +200,9 @@ class APIBase {
         } catch (e) {
             console.error('Authorization failed:', e);
             this.is_authorized = false;
-            clearAuthData();
+            // Spec rule: do NOT wipe auth storage on a transient
+            // WebSocket error. The token is still valid; the next
+            // reconnect will retry authorize.
             setIsAuthorized(false);
             globalObserver.emit('Error', e);
         } finally {
