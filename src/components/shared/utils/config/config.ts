@@ -1,19 +1,6 @@
 import { LocalStorageConstants, LocalStorageUtils, URLUtils } from '@deriv-com/utils';
 import { isStaging } from '../url/helpers';
 
-/**
- * App id used by the OAuth login flow. The WebSocket connection MUST
- * open with the same app id, otherwise Deriv returns InvalidToken when
- * we call `authorize(token)` because the token is bound to the app that
- * issued it. Pulled from the build-time env var `VITE_APP_ID` and falls
- * back to `111670` (the registered `derivfortunepro.vercel.app` app).
- */
-const OAUTH_APP_ID: number = (() => {
-    const fromEnv = process.env.VITE_APP_ID;
-    const parsed = fromEnv ? Number(fromEnv) : NaN;
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 111670;
-})();
-
 export const APP_IDS = {
     LOCALHOST: 36300,
     TMP_STAGING: 64584,
@@ -86,19 +73,13 @@ export const getDefaultAppIdAndUrl = () => {
     }
 
     const current_domain = getCurrentProductionDomain() ?? '';
-    // For unrecognized hosts (e.g. derivfortunepro.vercel.app, custom
-    // domains, preview deployments) fall back to the same OAuth app id
-    // we use to mint tokens. Otherwise the WebSocket connects as
-    // app_id=65555 while the token is bound to app_id=111670 → Deriv
-    // returns InvalidToken on authorize and the user is bounced back to
-    // the login screen with no balance.
-    const app_id = domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? OAUTH_APP_ID;
+    const app_id = domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? APP_IDS.PRODUCTION;
 
     return { app_id, server_url };
 };
 
 export const getAppId = () => {
-    let app_id: string | number | null = null;
+    let app_id = null;
     const config_app_id = window.localStorage.getItem('config.app_id');
     const current_domain = getCurrentProductionDomain() ?? '';
 
@@ -109,10 +90,7 @@ export const getAppId = () => {
     } else if (isTestLink()) {
         app_id = APP_IDS.LOCALHOST;
     } else {
-        // Unknown host → use the same app id as the OAuth flow so the
-        // freshly-issued token actually authorizes the WebSocket. See
-        // the comment in `getDefaultAppIdAndUrl` above.
-        app_id = domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? OAUTH_APP_ID;
+        app_id = domain_app_ids[current_domain as keyof typeof domain_app_ids] ?? APP_IDS.PRODUCTION;
     }
 
     return app_id;

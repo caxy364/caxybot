@@ -3,7 +3,6 @@ import clsx from 'clsx';
 import Cookies from 'js-cookie';
 import { observer } from 'mobx-react-lite';
 import { Outlet } from 'react-router-dom';
-import { hasDerivSession, hasOauthCallbackParams } from '@/auth/earlyAuth';
 import { loginWithDeriv } from '@/auth/loginWithDeriv';
 import PWAUpdateNotification from '@/components/pwa-update-notification';
 import { api_base } from '@/external/bot-skeleton';
@@ -142,6 +141,11 @@ const Layout = observer(() => {
             sessionStorage.setItem('query_param_currency', currency);
         }
 
+        const checkOIDCEnabledWithMissingAccount = !isEndpointPage && !isCallbackPage && !clientHasCurrency;
+        const shouldAuthenticate =
+            (isLoggedInCookie && !isClientAccountsPopulated && !isEndpointPage && !isCallbackPage) ||
+            checkOIDCEnabledWithMissingAccount;
+
         // Skip authentication when offline
         if (!isOnline) {
             console.log('[Layout] Offline detected, skipping authentication');
@@ -150,54 +154,12 @@ const Layout = observer(() => {
             return;
         }
 
-        // Race-safety delay (per spec 200–500ms). Lets earlyAuth + any other
-        // synchronous on-load storage writes settle before we read the
-        // session state. If the effect re-runs during the delay we cancel.
-        const cancelTimer = { cancelled: false };
-        const timer = setTimeout(async () => {
-            if (cancelTimer.cancelled) return;
-
-            // Re-read storage AFTER the delay so we see the values that
-            // earlyAuth wrote on the (possibly very recent) page load.
-            const hasSession = hasDerivSession();
-            const hasCallbackTokens = hasOauthCallbackParams();
-            const liveAccountsList = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
-            const liveIsClientAccountsPopulated = Object.keys(liveAccountsList).length > 0;
-
-            // SAFETY NET — never bounce the user back to login when:
-            //   * a Deriv session is already in storage (early auth ran), or
-            //   * OAuth callback tokens are still present on the URL (early auth
-            //     is about to fire). This prevents the redirect-loop.
-            const checkOIDCEnabledWithMissingAccount =
-                !isEndpointPage && !isCallbackPage && !clientHasCurrency && !hasSession && !hasCallbackTokens;
-            const shouldAuthenticate =
-                (isLoggedInCookie &&
-                    !liveIsClientAccountsPopulated &&
-                    !isEndpointPage &&
-                    !isCallbackPage &&
-                    !hasSession &&
-                    !hasCallbackTokens) ||
-                checkOIDCEnabledWithMissingAccount;
-
-            // eslint-disable-next-line no-console
-            console.log('[Layout] auth-guard decision', {
-                hasSession,
-                hasCallbackTokens,
-                liveIsClientAccountsPopulated,
-                isLoggedInCookie,
-                clientHasCurrency,
-                isEndpointPage,
-                isCallbackPage,
-                shouldAuthenticate,
-                deriv_token_local: Boolean(localStorage.getItem('deriv_token') || localStorage.getItem('authToken')),
-                deriv_token_session: Boolean(sessionStorage.getItem('deriv_token')),
-            });
-
+        // Create an async IIFE to handle authentication
+        (async () => {
             try {
                 // First, explicitly wait for TMB status to be determined
                 // This ensures we have the correct TMB status before proceeding
                 const tmbEnabled = await isTmbEnabled();
-                if (cancelTimer.cancelled) return;
 
                 // Now use the result of the explicit check
                 if (tmbEnabled) {
@@ -209,22 +171,17 @@ const Layout = observer(() => {
                     if (query_param_currency) {
                         sessionStorage.setItem('query_param_currency', query_param_currency);
                     }
-                    // eslint-disable-next-line no-console
-                    console.log('[Layout] no session detected — redirecting to Deriv OAuth');
+                    // Manual Deriv OAuth: stable redirect, no localhost / origin fallback.
                     loginWithDeriv({ account: query_param_currency });
                 }
             } catch (err) {
                 // eslint-disable-next-line no-console
+                setIsAuthenticating(false);
                 console.error('Authentication error:', err);
             } finally {
-                if (!cancelTimer.cancelled) setIsAuthenticating(false);
+                setIsAuthenticating(false);
             }
-        }, 350);
-
-        return () => {
-            cancelTimer.cancelled = true;
-            clearTimeout(timer);
-        };
+        })();
     }, [
         isLoggedInCookie,
         isClientAccountsPopulated,

@@ -1,0 +1,53 @@
+Let me check the deploy state and verify what's actually getting requested in the OAuth URL right now:
+
+
+2 actions
+Origin is up to date (33c7e50 includes the app-id fix). So the fix IS on Vercel — but the PWA service worker is serving the old cached bundle, which still has the broken app id and missing earlyAuth handler. That's why you're seeing the exact same behaviour as before the fix.
+
+Let me check the service worker setup:
+
+
+6 actions
+The fix IS deployed (origin/master is at 33c7e50 which contains all my changes). The problem now is the PWA service worker is serving old cached code from before my fixes. Your browser has the v1 service worker running, and it's serving the pre-fix index.html and bundle, so the new earlyAuth handler + app id fix never actually run.
+
+I need to bump the cache version so the new service worker invalidates the old cache and forces all clients to take the new bundle.
+
+
+Edited public/sw.js
+Now also bypass the SW entirely when OAuth tokens are on the URL — currently the SW caches the response of /?acct1=...&token1=..., which on subsequent identical requests returns a stale cached page that may not run earlyAuth at all:
+
+
+Edited public/sw.js
+Now also force the registration code to call update() on every page load so the new SW is checked-for and installed even when one is already active:
+
+
+4 actions
+Builds clean. Here's the diagnosis and what I shipped — this is the real "once and for long" fix:
+
+Why it kept failing even after my code fixes were on Vercel:
+
+Your app registers a PWA service worker (public/sw.js). Once a service worker has been registered on a domain, the browser keeps it running and only checks for an updated sw.js roughly once every 24 hours. While the old service worker is still controlling the tab, it serves the old cached index.html and bundle — meaning the new earlyAuth handler, the app id fix, and the throttle guard were all sitting on Vercel but never executed in your browser.
+
+The old bundle has the broken behaviour you keep seeing: tokens flash in the URL, the old clearAuthData() wipes them, header shows "Log in / Sign up". You assumed nothing was fixed; really, nothing-new was running.
+
+What I just changed (3 small edits, no behaviour change for happy-path users):
+
+public/sw.js — bumped CACHE_NAME from deriv-bot-v1 to deriv-bot-v3-auth-fix. The activate handler already deletes any cache whose name ≠ current, so the moment the new SW activates, every old precached HTML is purged.
+
+public/sw.js — added an explicit "hard-skip" branch: any request whose URL contains acct1, token1, or token query params bypasses the SW entirely and goes straight to the network. So Deriv's redirect-back-with-tokens can never be served from a stale cache.
+
+src/utils/pwa-utils.ts — registration now uses updateViaCache: 'none' (skips the HTTP cache when fetching sw.js) and calls registration.update() on every page load. Together they force the browser to discover the new service worker on the very next visit instead of in 24 hours.
+
+Important — one-time cleanup on YOUR browser to escape the stuck old SW:
+
+Because your current browser session is still under the old SW's control, automatic update may not flip until the next full close-all-tabs cycle. To force it now:
+
+Push these changes to GitHub → Vercel deploys.
+On https://derivfortunepro.vercel.app/, open DevTools → Application → Service Workers, click Unregister.
+Same panel → Storage → Clear site data.
+Close every tab pointing at derivfortunepro.vercel.app.
+Re-open the site. You'll see in console:
+[SW] Service worker script loaded (new one)
+[SW] Deleting old cache: deriv-bot-v1
+Click "Log in" → complete OAuth at Deriv → you should land back at / with the header showing the active account + balance, and the console should log [earlyAuth] captured OAuth callback — N account(s).
+After this one-time cleanup, every future deploy will Just Work for you and any other user, because step 3 above guarantees the SW always checks for a new version on every page load.
