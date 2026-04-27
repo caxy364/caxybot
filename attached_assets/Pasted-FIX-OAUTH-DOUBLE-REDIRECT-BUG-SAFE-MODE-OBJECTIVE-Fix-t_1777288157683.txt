@@ -1,0 +1,136 @@
+FIX OAUTH DOUBLE REDIRECT BUG (SAFE MODE)
+🎯 OBJECTIVE
+
+Fix the issue where after successful Deriv login:
+
+App loads with:
+https://derivfortunepro.vercel.app/?acct1=...&token1=...
+Then immediately changes to:
+https://derivfortunepro.vercel.app/
+
+👉 This causes loss of authentication tokens
+
+🚫 ABSOLUTE CONSTRAINTS (DO NOT BREAK THESE)
+DO NOT refactor architecture
+DO NOT modify earlyAuth.ts unless explicitly required below
+DO NOT modify authorizeSession.ts unless explicitly required below
+DO NOT change UI behavior
+DO NOT change OAuth URL construction
+DO NOT introduce new auth systems
+DO NOT remove existing login flow
+ONLY fix post-login redirect / URL cleanup behavior
+🧠 ROOT CAUSE (IMPORTANT)
+
+There is an automatic redirect or URL cleanup running AFTER OAuth success, likely from:
+
+auth initialization logic
+route guard
+session bootstrap
+useEffect redirect
+URL normalization logic
+
+👉 This second redirect is wiping query params:
+acct1, token1, cur1
+
+🧩 STEP 1 — FIND THE BAD BEHAVIOR (DO NOT GUESS)
+
+Search for ANY of the following patterns:
+
+navigate("/")
+window.location.replace("/")
+window.location.href =
+history.replaceState
+location.replace
+remove search params
+clear URL
+🧩 STEP 2 — APPLY SAFE GUARD (MANDATORY FIX)
+
+Wherever a redirect or URL cleanup happens AFTER app load, wrap it with:
+
+const hasOAuthParams =
+  window.location.search.includes("acct") ||
+  window.location.search.includes("token");
+🧩 STEP 3 — MODIFY REDIRECT LOGIC (ONLY WHERE NECESSARY)
+❌ BEFORE (dangerous pattern)
+if (isLoggedIn) {
+  navigate("/");
+}
+
+OR
+
+window.location.replace("/");
+✅ AFTER (SAFE FIX — MUST APPLY THIS RULE)
+const hasOAuthParams =
+  window.location.search.includes("acct") ||
+  window.location.search.includes("token");
+
+// ONLY redirect if NO OAuth params exist
+if (isLoggedIn && !hasOAuthParams) {
+  navigate("/");
+}
+🧩 STEP 4 — PROTECT AUTH INITIALIZATION FLOW
+
+If tokens are processed on load (very likely in earlyAuth.ts or similar):
+
+👉 ENSURE THIS RULE:
+
+IF URL contains token parameters:
+    - DO NOT redirect
+    - DO NOT clean URL immediately
+    - ONLY parse + store session
+🧩 STEP 5 — OPTIONAL (ONLY IF EXISTS)
+
+If there is code that cleans URL like:
+
+window.history.replaceState({}, document.title, "/");
+
+👉 CHANGE TO:
+
+const hasOAuthParams =
+  window.location.search.includes("acct") ||
+  window.location.search.includes("token");
+
+if (!hasOAuthParams) {
+  window.history.replaceState({}, document.title, "/");
+}
+🎯 EXPECTED FINAL BEHAVIOR
+
+After login:
+
+Step 1
+https://derivfortunepro.vercel.app/?acct1=...&token1=...
+Step 2 (IMPORTANT)
+
+✔ stays on same URL
+✔ tokens preserved
+✔ session initialized
+✔ NO automatic redirect to /
+
+🚨 WHAT THIS FIX PREVENTS
+❌ token loss after login
+❌ infinite redirect loops
+❌ blank dashboard after login
+❌ undefined auth state
+❌ second-page overwrite bug
+🧠 KEY PRINCIPLE (DO NOT IGNORE)
+
+OAuth redirect data must be treated as first-class session input, NOT “temporary URL noise”
+
+So:
+
+✔ read it
+✔ store it
+❌ do NOT immediately erase it before processing finishes
+
+⚡ FINAL SUMMARY
+
+You are fixing ONLY:
+
+🔴 unintended post-login redirect that wipes OAuth query parameters
+
+Without touching:
+
+OAuth construction
+UI
+core auth system
+routing architecture

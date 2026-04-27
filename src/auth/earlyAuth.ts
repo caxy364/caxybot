@@ -92,8 +92,16 @@ export const runEarlyAuth = (): EarlyAuthResult => {
 
     // URL cleanup — must happen ONLY after the writes above succeed,
     // otherwise a storage failure would lose the tokens entirely.
+    // Guard: do NOT clean if OAuth params are still present — clearing them
+    // before downstream consumers (AuthWrapper, api-base) finish reading the
+    // stored session can cause a race that wipes auth state.
     try {
-        window.history.replaceState({}, document.title, '/');
+        const hasOAuthParams =
+            window.location.search.includes('acct') || window.location.search.includes('token');
+
+        if (!hasOAuthParams) {
+            window.history.replaceState({}, document.title, '/');
+        }
     } catch (e) {
         // eslint-disable-next-line no-console
         console.warn('[AUTH] URL clean failed', e);
