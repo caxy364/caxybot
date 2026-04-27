@@ -1,0 +1,77 @@
+Fix the OAuth redirect issue where the app generates:
+
+/undefined?app_id=undefined&redirect_uri=undefined
+
+Ensure Deriv login works on all deployments (Vercel, Replit, Netlify, GitHub Pages) without breaking existing authentication logic.
+
+🚫 STRICT RULES (DO NOT VIOLATE)
+DO NOT refactor project structure
+DO NOT modify earlyAuth.ts
+DO NOT modify authorizeSession.ts
+DO NOT modify UI components
+DO NOT change rsbuild.config.ts
+DO NOT remove existing auth flow logic
+ONLY fix OAuth URL construction safety + env handling
+🧩 STEP 1 — FIX ROOT CAUSE (BROKEN ENV SAFETY)
+
+The issue is caused by undefined environment variables in production builds.
+
+You MUST ensure OAuth URL never receives undefined values.
+
+🧩 STEP 2 — UPDATE ONLY THIS FILE
+
+📍 FILE:
+
+src/auth/loginWithDeriv.ts
+❌ REMOVE ANY CURRENT buildDerivOAuthUrl IMPLEMENTATION
+✅ REPLACE WITH THIS EXACT IMPLEMENTATION
+const getRedirectUri = () => {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/`;
+  }
+
+  return import.meta.env.VITE_REDIRECT_URI || "https://derivfortunepro.vercel.app/";
+};
+
+const getAppId = () => import.meta.env.VITE_APP_ID || "111670";
+
+const getOAuthUrl = () =>
+  import.meta.env.VITE_OAUTH_URL || "https://oauth.deriv.com/oauth2/authorize";
+
+export const buildDerivOAuthUrl = () => {
+  const url = new URL(getOAuthUrl());
+
+  url.searchParams.set("app_id", getAppId());
+  url.searchParams.set("redirect_uri", getRedirectUri());
+
+  return url.toString();
+};
+🧠 WHY THIS FIX IS REQUIRED
+
+This ensures:
+
+✔ No undefined values in production
+✔ Works even if Vercel env vars are missing
+✔ Works across all hosting platforms
+✔ Prevents /undefined URL generation
+✔ Keeps Deriv OAuth compliant
+🧩 STEP 3 — VERIFY DERIV DASHBOARD (NO CODE CHANGE)
+
+Ensure this is registered:
+
+https://derivfortunepro.vercel.app/
+🎯 EXPECTED FINAL RESULT
+
+After login, URL MUST be:
+
+https://derivfortunepro.vercel.app/?acct1=...&token1=...
+
+NOT:
+
+/undefined?app_id=undefined
+⚡ IMPORTANT NOTES
+This fix is non-breaking
+No auth flow changes
+No UI changes
+No architecture changes
+Only prevents runtime environment failure
