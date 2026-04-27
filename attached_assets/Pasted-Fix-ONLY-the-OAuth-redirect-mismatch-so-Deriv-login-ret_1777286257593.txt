@@ -1,0 +1,70 @@
+Fix ONLY the OAuth redirect mismatch so Deriv login returns correctly to:
+
+https://derivfortunepro.vercel.app/?acct1=...&token1=...
+
+DO NOT change app architecture, auth flow, or portability logic.
+
+🚫 STRICT CONSTRAINTS (MUST FOLLOW)
+DO NOT refactor code structure
+DO NOT modify earlyAuth.ts
+DO NOT modify authorizeSession.ts
+DO NOT modify UI components
+DO NOT introduce window.location.origin
+DO NOT change rsbuild.config.ts
+DO NOT add fallback logic
+ONLY fix env usage + OAuth URL construction
+🧩 STEP 1 — ENVIRONMENT FIX (CRITICAL)
+🔍 FIND & REPLACE everywhere:
+❌ OLD VALUE:
+VITE_REDIRECT_URI=https://derivfortunepro.vercel.app/auth/callback
+✅ NEW VALUE:
+VITE_REDIRECT_URI=https://derivfortunepro.vercel.app/
+📌 Apply changes in EXACT files:
+.env
+.env.production
+.env.example
+replit.md (documentation references only)
+🧩 STEP 2 — FIX OAUTH URL BUILDER (ONLY FILE ALLOWED TO CHANGE CODE)
+📍 FILE:
+src/auth/loginWithDeriv.ts
+❌ REMOVE ANY EXISTING buildDerivOAuthUrl LOGIC
+✅ REPLACE WITH EXACT FUNCTION BELOW:
+export const buildDerivOAuthUrl = () => {
+  const APP_ID = import.meta.env.VITE_APP_ID;
+  const REDIRECT = import.meta.env.VITE_REDIRECT_URI;
+  const BASE = import.meta.env.VITE_OAUTH_URL;
+
+  return `${BASE}?app_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT)}`;
+};
+⚠️ CRITICAL RULES INSIDE THIS STEP
+MUST use ONLY import.meta.env
+MUST NOT hardcode any URL
+MUST NOT use /auth/callback
+MUST NOT use window.location
+MUST NOT introduce fallback redirect logic
+🎯 EXPECTED FINAL RESULT
+
+After login:
+
+Deriv redirects back to:
+https://derivfortunepro.vercel.app/?acct1=XXXX&token1=XXXX
+
+✔ No callback path
+✔ No localhost leakage
+✔ No build-time mismatch
+✔ Works on Replit + Vercel + production
+
+🧠 IMPORTANT DEPLOYMENT NOTE (DO NOT SKIP)
+
+Ensure in Vercel dashboard environment variables:
+
+VITE_APP_ID=111670
+VITE_REDIRECT_URI=https://derivfortunepro.vercel.app/
+VITE_OAUTH_URL=https://oauth.deriv.com/oauth2/authorize
+🧾 SUMMARY OF WHAT THIS FIX DOES
+
+✔ Fixes OAuth redirect mismatch
+✔ Keeps architecture untouched
+✔ Prevents localhost leakage
+✔ Ensures production login works
+✔ Maintains current auth flow integrity

@@ -118,7 +118,7 @@ on Vercel/GitHub Pages/Netlify. Fixed:
    look broken on third-party hosts.
 
 **To deploy on Deriv's side**: register your deployment origin (e.g.
-`https://yoursite.vercel.app/auth/callback`) on the Deriv app id once
+`https://derivfortunepro.vercel.app/`) on the Deriv app id once
 (https://app.deriv.com/account/api-token → your app → Edit → Redirect URI).
 That's the only manual step.
 
@@ -147,7 +147,7 @@ Variables** (apply to Production / Preview / Development as needed):
 | Variable | Production value |
 |---|---|
 | `VITE_APP_ID` | `111670` (or your own Deriv app id) |
-| `VITE_REDIRECT_URI` | `https://derivfortunepro.vercel.app/auth/callback` |
+| `VITE_REDIRECT_URI` | `https://derivfortunepro.vercel.app/` |
 | `VITE_OAUTH_URL` | `https://oauth.deriv.com/oauth2/authorize` |
 
 The exact same three keys are required for local dev — see `.env.example`.
@@ -157,7 +157,7 @@ The exact same three keys are required for local dev — see `.env.example`.
 2. Create `.env.development` at the repo root with:
    ```
    VITE_APP_ID=111670
-   VITE_REDIRECT_URI=http://localhost:3000/auth/callback
+   VITE_REDIRECT_URI=http://localhost:3000/
    VITE_OAUTH_URL=https://oauth.deriv.com/oauth2/authorize
    ```
 3. (Optional) Create `.env.production` for local production builds.
