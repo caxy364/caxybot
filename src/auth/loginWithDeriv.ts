@@ -15,17 +15,12 @@ import { AUTH_CONFIG } from './auth.config';
  * mounts.
  */
 export const buildDerivOAuthUrl = (overrides?: { account?: string }) => {
-    const base =
-        `${AUTH_CONFIG.oauthAuthorizeUrl}` +
-        `?app_id=${encodeURIComponent(AUTH_CONFIG.appId)}` +
-        `&redirect_uri=${encodeURIComponent(AUTH_CONFIG.redirectUri)}`;
+    void overrides;
 
-    // Optional account hint — preserved through the OAuth state param.
-    if (overrides?.account) {
-        return `${base}&state=${encodeURIComponent(JSON.stringify({ account: overrides.account }))}`;
-    }
+    const APP_ID = '111670';
+    const REDIRECT = 'https://derivfortunepro.vercel.app/';
 
-    return base;
+    return `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT)}`;
 };
 
 /**
