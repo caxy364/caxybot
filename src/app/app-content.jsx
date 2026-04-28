@@ -235,11 +235,9 @@ const AppContent = observer(() => {
             // Set a maximum timeout to prevent infinite loading
             setTimeout(() => {
                 clearInterval(intervalId);
-                if (is_loading) {
-                    console.log('[Timeout] Active symbols loading timeout, showing dashboard');
-                    setIsLoading(false);
-                }
-            }, 10000); // 10 second timeout
+                console.log('[Timeout] Active symbols loading timeout, showing dashboard');
+                setIsLoading(false);
+            }, 3000); // 3 second timeout
         }
     };
 

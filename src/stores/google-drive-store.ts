@@ -97,19 +97,26 @@ export default class GoogleDriveStore {
     };
 
     initialiseClient = () => {
-        this.client = google.accounts.oauth2.initTokenClient({
-            client_id: this.client_id,
-            scope: this.scope,
-            callback: (response: { expires_in?: number; access_token?: string; error?: any }) => {
-                if (response?.access_token && !response?.error && response?.expires_in) {
-                    this.access_token = response.access_token;
-                    this.setIsAuthorized(true);
-                    localStorage.setItem('google_access_token', response.access_token);
-                    this.setGoogleDriveTokenExpiry(response.expires_in);
-                    this.setGoogleDriveTokenValid(true);
-                }
-            },
-        });
+        if (!this.client_id) {
+            return;
+        }
+        try {
+            this.client = google.accounts.oauth2.initTokenClient({
+                client_id: this.client_id,
+                scope: this.scope,
+                callback: (response: { expires_in?: number; access_token?: string; error?: any }) => {
+                    if (response?.access_token && !response?.error && response?.expires_in) {
+                        this.access_token = response.access_token;
+                        this.setIsAuthorized(true);
+                        localStorage.setItem('google_access_token', response.access_token);
+                        this.setGoogleDriveTokenExpiry(response.expires_in);
+                        this.setGoogleDriveTokenValid(true);
+                    }
+                },
+            });
+        } catch (e) {
+            // Google Drive is optional — silently skip if init fails
+        }
     };
 
     setIsAuthorized(is_authorized: boolean) {
