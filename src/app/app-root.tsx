@@ -42,6 +42,16 @@ const AppRoot = () => {
     const [, setIsTmbEnabled] = useState(false);
     const { isTmbEnabled } = useTMB();
 
+    // Hard safety net: never let the AppRoot loader block the UI for more
+    // than 2.5s, regardless of TMB / API init success or failure.
+    useEffect(() => {
+        const id = setTimeout(() => {
+            setIsTmbCheckComplete(true);
+            setIsApiInitialized(true);
+        }, 2500);
+        return () => clearTimeout(id);
+    }, []);
+
     // Effect to check TMB status - independent of API initialization
     useEffect(() => {
         const checkTmbStatus = async () => {

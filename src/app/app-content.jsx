@@ -37,6 +37,17 @@ const AppContent = observer(() => {
     const [is_loading, setIsLoading] = React.useState(true);
     const [is_eu_error_loading, setIsEuErrorLoading] = React.useState(true);
     const [offline_timeout, setOfflineTimeout] = React.useState(null);
+
+    // Hard safety net: never let the spinner block the UI for more than 4s,
+    // regardless of WebSocket / API / store init success or failure.
+    useEffect(() => {
+        const id = setTimeout(() => {
+            setIsApiInitialized(true);
+            setIsLoading(false);
+            setIsEuErrorLoading(false);
+        }, 4000);
+        return () => clearTimeout(id);
+    }, []);
     const store = useStore();
     const { app, transactions, common, client } = store;
     const { showDigitalOptionsMaltainvestError } = app;
@@ -243,8 +254,11 @@ const AppContent = observer(() => {
 
     React.useEffect(() => {
         if (is_api_initialized) {
-            init();
-            setIsLoading(true);
+            try {
+                init();
+            } catch (e) {
+                console.error('[AppContent] init() failed:', e);
+            }
             if (!client.is_logged_in) {
                 changeActiveSymbolLoadingState();
             }

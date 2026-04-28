@@ -117,6 +117,10 @@ export default defineConfig({
     },
     dev: {
         hmr: true,
+        // Disable lazy compilation in dev — rsbuild's lazy chunks get stale
+        // hashes between rebuilds, causing ChunkLoadError on every reload
+        // in the proxied iframe environment.
+        lazyCompilation: false,
     },
     tools: {
         rspack: {
