@@ -1,4 +1,4 @@
-import Cookies from 'js-cookie';
+import authStore from '@/auth/authStore';
 import { action, makeObservable, reaction, when } from 'mobx';
 import { BOT_RESTRICTED_COUNTRIES_LIST } from '@/components/layout/header/utils';
 import {
@@ -86,17 +86,11 @@ export default class AppStore {
         const { client, common } = this.core;
         const { is_landing_company_loaded } = client;
 
-        // Check if we're in the process of logging in
-        // When isSingleLoggingIn is true, we don't want to show the EU error message
-        const is_tmb_enabled = window.is_tmb_enabled === true;
-        // OAuth tokens are captured by runEarlyAuth() before React
-        // mounts (see src/main.tsx); there is no callback route.
-        // We're "logging in" only when the cookie says we're logged in
-        // but the app hasn't yet finished writing the accounts list.
+        // We are "mid-login" when the authStore has an access token but
+        // hasn't yet been hydrated with per-account details. Suppress
+        // the EU error message during that window so it doesn't flash.
         const isSingleLoggingIn =
-            Cookies.get('logged_state') === 'true' &&
-            !is_tmb_enabled &&
-            Object.keys(JSON.parse(localStorage.getItem('accountsList') || '{}')).length === 0;
+            authStore.isAuthenticated() && authStore.getState().accounts.length === 0;
 
         if (isSingleLoggingIn) {
             common.setError(false, {});

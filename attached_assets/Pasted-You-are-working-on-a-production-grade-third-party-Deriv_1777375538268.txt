@@ -1,0 +1,207 @@
+You are working on a production-grade third-party Deriv trading web app (React + TypeScript) using a bot-skeleton architecture.
+
+The current implementation is partially using legacy Deriv API patterns and mixed authentication flows, which is causing:
+
+Login redirect looping back to login page
+InvalidToken / unauthorized sessions
+Old App ID compatibility issues
+Mixed OAuth + localStorage auth conflicts
+api_base inconsistent initialization
+WebSocket not properly re-authorizing after redirect
+🎯 OBJECTIVE
+
+Fully migrate the application to the NEW Deriv API Authentication Standard (2026 spec):
+
+MUST USE:
+1. OAuth 2.0 Authorization Code Flow with PKCE
+Authorization endpoint:
+https://auth.deriv.com/oauth2/auth
+Token endpoint:
+https://auth.deriv.com/oauth2/token
+Required parameters:
+client_id = NEW APP ID: 32UpAZvxBqalqEFHVMTNS
+redirect_uri (must match dashboard exactly)
+response_type=code
+code_challenge (PKCE S256)
+code_challenge_method=S256
+state (CSRF protection)
+scope = trade account_manage
+2. WebSocket authentication MUST use:
+OAuth access_token (Bearer token)
+OR OTP endpoint:
+
+https://api.derivws.com/trading/v1/options/accounts/{accountId}/otp
+
+3. NEW App ID (CRITICAL)
+
+Replace ALL old app_id usage with:
+
+32UpAZvxBqalqEFHVMTNS
+
+Remove ANY legacy numeric app IDs.
+
+🚨 CRITICAL BUG TO FIX (LOGIN LOOP)
+CURRENT ISSUE:
+
+After login:
+
+user authenticates successfully
+callback receives token
+BUT app redirects back to login again
+🔍 ROOT CAUSE (LIKELY)
+
+You must search and fix ALL of these:
+
+1. Token storage mismatch
+authToken is stored in localStorage
+BUT api_base uses V2GetActiveToken() OR Cookies.logged_state
+mismatch causes re-login loop
+2. api_base reinitialization bug
+
+This pattern is causing reconnect loops:
+
+if (V2GetActiveToken()) {
+    await this.authorizeAndSubscribe();
+}
+
+BUT token is never properly synced after OAuth callback.
+
+3. Mixed auth systems
+
+Remove or unify:
+
+js-cookie logged_state
+localStorage authToken
+URLUtils loginInfo
+V2GetActiveToken legacy helper
+🧠 REQUIRED NEW AUTH ARCHITECTURE
+STEP 1 — OAuth Callback Handler (NEW SINGLE SOURCE OF TRUTH)
+
+After redirect:
+
+/callback?code=XXXX&state=YYYY
+
+DO:
+
+verify state (sessionStorage)
+exchange code → access_token (server or secure client flow)
+store ONLY:
+access_token
+client_id (loginid)
+accounts_list
+
+in ONE place:
+
+👉 authStore (or unified auth module)
+
+STEP 2 — REMOVE THIS ANTI-PATTERN
+
+❌ DO NOT:
+
+re-authorize on every refresh using cookies
+re-call authorize() inside api_base.init()
+depend on URLUtils for login state
+STEP 3 — NEW api_base RULES
+
+Update APIBase:
+
+REMOVE:
+V2GetActiveToken()
+V2GetActiveClientId()
+Cookies.logged_state
+REPLACE WITH:
+authStore.getAccessToken()
+authStore.getActiveAccount()
+STEP 4 — SINGLE AUTH FLOW ONLY
+FLOW MUST BE:
+User clicks login
+Redirect to:
+https://auth.deriv.com/oauth2/auth?client_id=32UpAZvxBqalqEFHVMTNS...
+Callback receives code
+Exchange code → access_token
+Save token in authStore
+Initialize api_base ONCE
+Connect WebSocket using token
+NO re-login loop ever
+STEP 5 — WebSocket AUTH RULE
+
+Replace all authentication calls:
+
+OLD:
+api.authorize(token)
+NEW:
+
+Use ONLY:
+
+Bearer token OR
+OTP endpoint:
+POST /trading/v1/options/accounts/{id}/otp
+
+Then connect:
+
+new WebSocket(wsUrlFromOtp)
+🧹 CLEANUP REQUIRED
+
+Remove or refactor:
+
+AUTH SYSTEMS TO DELETE:
+handleOidcAuthFailure (old cookie logic)
+Cookies.logged_state
+useOauth2 hook (replace or simplify)
+URLUtils login parsing fallback
+legacy V2 token helpers
+🔥 FIX LOGIN LOOP ROOT CAUSE
+
+Ensure:
+
+ON APP START:
+
+ONLY check:
+
+authStore.hasValidAccessToken()
+
+NOT:
+
+cookies
+URL params
+localStorage scattered keys
+🧠 FINAL RULE
+
+There must be ONLY ONE SOURCE OF TRUTH:
+
+👉 authStore (or equivalent global auth manager)
+
+It controls:
+
+access_token
+account_id
+login state
+logout
+re-auth
+🧪 EXPECTED RESULT AFTER FIX
+
+After login:
+
+✔ redirects to callback once
+✔ stores access_token once
+✔ initializes API once
+✔ WebSocket connects
+✔ NO return to login page
+✔ NO InvalidToken loop
+✔ bot-skeleton api_base works consistently
+✔ account switch works without re-login
+
+🚀 IMPORTANT
+
+DO NOT:
+
+break bot-skeleton engine
+remove active_symbols logic
+break chart_api
+remove subscriptions system
+
+ONLY fix authentication + session lifecycle.
+
+END OF TASK
+
+Migrate everything to the new Deriv OAuth2 + PKCE + App ID system and ensure stable session persistence without login loops.

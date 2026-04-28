@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import Cookies from 'js-cookie';
 import { observer } from 'mobx-react-lite';
 import { Outlet } from 'react-router-dom';
+import authStore from '@/auth/authStore';
 import { loginWithDeriv } from '@/auth/loginWithDeriv';
 import PWAUpdateNotification from '@/components/pwa-update-notification';
 import { api_base } from '@/external/bot-skeleton';
@@ -32,7 +32,7 @@ const Layout = observer(() => {
         [tmb_enabled_from_hook]
     );
 
-    const isLoggedInCookie = Cookies.get('logged_state') === 'true';
+    const isLoggedInCookie = authStore.isAuthenticated();
     const isEndpointPage = window.location.pathname.includes('endpoint');
     const checkClientAccount = JSON.parse(localStorage.getItem('clientAccounts') ?? '{}');
     const getQueryParams = new URLSearchParams(window.location.search);

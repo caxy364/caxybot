@@ -1,4 +1,3 @@
-import Cookies from 'js-cookie';
 import CommonStore from '@/stores/common-store';
 import { TAuthData } from '@/types/api-types';
 import { observer as globalObserver } from '../../utils/observer';
@@ -167,14 +166,10 @@ class APIBase {
             const { authorize, error } = await this.api.authorize(this.token);
             if (error) {
                 if (error.code === 'InvalidToken') {
-                    const is_tmb_enabled = window.is_tmb_enabled === true;
-                    if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled) {
-                        globalObserver.emit('InvalidToken', { error });
-                    }
-                    // Spec rule: NEVER call clearAuthData() on the
-                    // initial authorize attempt. The token is the
-                    // single source of truth — surface the error,
-                    // don't wipe storage.
+                    // authStore is the single source of truth; just emit
+                    // and let useInvalidTokenHandler decide how to react
+                    // (clear authStore + retrigger PKCE login).
+                    globalObserver.emit('InvalidToken', { error });
                 } else {
                     console.error('Authorization error:', error);
                 }

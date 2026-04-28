@@ -1,30 +1,32 @@
 /**
- * Deriv OAuth configuration — single canonical redirect.
+ * Deriv OAuth 2.0 + PKCE configuration — single source of truth.
  *
- * The redirect URI is HARDCODED to the production callback URL
- * registered on the Deriv app (id 111670). This is intentional:
+ * Spec (2026):
+ *   - Authorization endpoint: https://auth.deriv.com/oauth2/auth
+ *   - Token endpoint:         https://auth.deriv.com/oauth2/token
+ *   - Flow: Authorization Code with PKCE (S256)
+ *   - client_id: 32UpAZvxBqalqEFHVMTNS  (OAuth client, alphanumeric)
  *
- *   - Deriv's OAuth server only accepts redirect URIs that have been
- *     pre-registered on the app. We've registered exactly ONE URL,
- *     so any other value would be rejected.
- *   - Using `window.location.origin` produced different redirects per
- *     host (Replit dev domain, Vercel preview aliases, custom domains)
- *     and broke the login flow on every domain Deriv didn't know about.
- *   - Using `localhost` / `127.0.0.1` fallbacks created noisy "redirect
- *     URI mismatch" errors during local dev.
+ * Legacy support:
+ *   - WebSocket app_id stays at 111670. The Deriv WebSocket protocol
+ *     (wss://ws.derivws.com/websockets/v3?app_id=...) requires a numeric
+ *     app_id, so the new alphanumeric client_id cannot be used there.
+ *     The OAuth access_token issued under client_id 32UpAZvxBqalqEFHVMTNS
+ *     is what authorises the WebSocket.
  *
- * If you need to deploy to a different production domain, register
- * that URL on the Deriv app and update DEFAULT_REDIRECT_URI here.
+ * redirect_uri:
+ *   - Must EXACTLY match a value registered on the Deriv app dashboard
+ *     for client_id 32UpAZvxBqalqEFHVMTNS.
+ *   - Defaults to `window.location.origin + '/'` so the same build runs
+ *     in dev and prod, but can be pinned via VITE_REDIRECT_URI when a
+ *     fixed callback URL is required.
  */
 
-const DEFAULT_APP_ID = '111670';
-const DEFAULT_OAUTH_URL = 'https://oauth.deriv.com/oauth2/authorize';
-// Must EXACTLY match the redirect URL registered on the Deriv app
-// dashboard (id 111670). Deriv rejects any other value, which results
-// in the user being bounced back without `acct1/token1/cur1` query
-// params — i.e. "the URL is not carrying the access token". The
-// registered URL is the site root.
-const DEFAULT_REDIRECT_URI = 'https://derivfortunepro.vercel.app/';
+const DEFAULT_CLIENT_ID = '32UpAZvxBqalqEFHVMTNS';
+const DEFAULT_LEGACY_APP_ID = '111670';
+const DEFAULT_AUTHORIZE_URL = 'https://auth.deriv.com/oauth2/auth';
+const DEFAULT_TOKEN_URL = 'https://auth.deriv.com/oauth2/token';
+const DEFAULT_SCOPE = 'trade account_manage';
 
 const readEnv = (name: string): string | undefined => {
     // process.env.VITE_* is replaced at build time by Rsbuild's `define`.
@@ -32,11 +34,29 @@ const readEnv = (name: string): string | undefined => {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
 };
 
+const getRedirectUri = (): string => {
+    const override = readEnv('VITE_REDIRECT_URI');
+    if (override) return override;
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return `${window.location.origin}/`;
+    }
+    // SSR / build-time fallback — overridden as soon as the browser runs.
+    return 'http://localhost:5000/';
+};
+
 export const AUTH_CONFIG = {
-    appId: readEnv('VITE_APP_ID') ?? DEFAULT_APP_ID,
-    oauthAuthorizeUrl: readEnv('VITE_OAUTH_URL') ?? DEFAULT_OAUTH_URL,
-    redirectUri: DEFAULT_REDIRECT_URI,
-    postLoginRedirect: '/dashboard',
+    /** OAuth 2.0 client identifier (alphanumeric, new format). */
+    clientId: readEnv('VITE_CLIENT_ID') ?? DEFAULT_CLIENT_ID,
+    /** Numeric WebSocket app_id required by wss://ws.derivws.com (legacy). */
+    legacyAppId: readEnv('VITE_APP_ID') ?? DEFAULT_LEGACY_APP_ID,
+    authorizeUrl: readEnv('VITE_OAUTH_AUTHORIZE_URL') ?? DEFAULT_AUTHORIZE_URL,
+    tokenUrl: readEnv('VITE_OAUTH_TOKEN_URL') ?? DEFAULT_TOKEN_URL,
+    scope: readEnv('VITE_OAUTH_SCOPE') ?? DEFAULT_SCOPE,
+    get redirectUri(): string {
+        return getRedirectUri();
+    },
+    /** Where to send the user after a successful login. */
+    postLoginRedirect: '/',
 } as const;
 
 export type AuthConfig = typeof AUTH_CONFIG;

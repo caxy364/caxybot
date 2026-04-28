@@ -1,0 +1,56 @@
+Authentication
+Understand how to authenticate users with the Deriv API using OAuth 2.0 apps and Personal Access Token (PAT) apps.
+
+To unlock the complete functionality of Deriv APIs, you must first authenticate and then authorize your users. Authentication lets your application securely act on behalf of a user when accessing protected Deriv APIs such as WebSocket or REST.
+
+Deriv supports two ways to authenticate users: OAuth 2.0 apps and Personal Access Token (PAT) apps. The method you choose depends on how your product handles user sign-in and whether it supports browser redirects or needs manual token input.
+
+Authentication Methods
+OAuth 2.0
+1
+Redirect
+to Deriv
+2
+User
+Logs In
+3
+Code
+Returned
+4
+Exchange
+for Token
+Personal Access Token
+1
+Generate
+Token
+2
+Paste
+into App
+3
+App Uses
+Token
+OAuth 2.0 apps
+OAuth 2.0 lets users grant your app access without sharing their password. Your app redirects the user to a Deriv sign-in and consent page. After the user logs in and approves permission, Deriv returns an authorization code to your app. You exchange this code for an access token, which you then use to authenticate API requests.
+
+Set up OAuth 2.0 →
+PAT apps
+With a PAT app, the user generates a Personal Access Token in Deriv and manually enters or pastes it into your application. The app securely stores the token and includes it in API requests as a bearer token.
+
+Token-based access
+Both methods give your app tokens to make authenticated API calls. The key difference is how users sign in and onboard.
+Why Authentication Matters
+Authentication improves security by keeping user passwords out of third-party apps. Tokens limit access based on scopes and can be revoked independently if needed.
+
+OAuth 2.0 provides a standardized flow with short-lived access tokens to enhance security and user experience. PATs provide a simpler authentication option when manual token entry is acceptable.
+
+OAuth 2.0 app vs PAT app — at a glance
+Aspect	OAuth 2.0 app	PAT app
+Best fit	Web-based applications	Desktop/native and non-web contexts
+How onboarding works	User is redirected to a Deriv OAuth 2.0 sign-in and consent page; after approval, Deriv redirects back with an authorization code.	User generates a Personal Access Token in Deriv and manually pastes it into the app.
+Redirect URLs	Required for completing the flow.	Not used.
+User experience	Seamless web sign-in with consent.	Manual token entry, simple but less automated.
+Use case examples	Web dashboards, browser apps.	Desktop tools, CLI apps, native clients.
+Security notes	Issues short-lived tokens and minimizes long-term credential sharing.	PATs act like scoped API credentials and can be revoked independently.
+When to choose which
+Choose OAuth 2.0 app when your product can handle browser redirects and you need a standard delegated flow with user authorization.
+Choose PAT app when browser redirects are not practical and manual token entry is acceptable, such as in desktop or native environments.

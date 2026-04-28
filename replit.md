@@ -31,9 +31,31 @@ Preferred communication style: Simple, everyday language.
 - Support for multiple account types (demo, real, wallet-based)
 
 ### Authentication
-- OAuth2-based authentication flow with OIDC support
-- Token Management Backend (TMB) integration for enhanced session handling
-- Multi-account support with account switching capabilities
+- **OAuth 2.0 with PKCE** is the only supported login flow.
+  - Authorize endpoint: `https://auth.deriv.com/oauth2/auth`
+  - Token endpoint: `https://auth.deriv.com/oauth2/token`
+  - `client_id`: `32UpAZvxBqalqEFHVMTNS` (override with `VITE_CLIENT_ID`)
+  - Scope: `trade account_manage`
+  - PKCE method: `S256` (SHA-256 of a 64-byte random verifier, base64url, unpadded)
+- **Single source of truth**: `src/auth/authStore.ts`. Every login state
+  read in the app must come from `authStore.getAccessToken()`,
+  `authStore.getActiveAccount()`, `authStore.isAuthenticated()`, etc.
+  Legacy `localStorage` keys (`authToken`, `accountsList`,
+  `clientAccounts`, `active_loginid`) are still mirrored from the store
+  for the bot-skeleton, but are write-only — never read back into auth.
+- WebSocket `app_id` stays at `111670` (legacy) because the Deriv
+  WebSocket protocol requires a numeric id; the new alphanumeric
+  `client_id` only authenticates users at `/oauth2/auth`. The OAuth
+  access token issued under that client_id is what authorizes the
+  WebSocket via `api.authorize(token)`.
+- Removed: `V2GetActiveToken` reading from `localStorage`,
+  `Cookies.logged_state` probing, `URLUtils.getLoginInfoFromURL`
+  fallback, `useOauth2`'s `OAuth2Logout` integration, the entire
+  legacy TMB sessions/active flow, and `handleOidcAuthFailure`.
+- Files: `src/auth/auth.config.ts`, `src/auth/pkce.ts`,
+  `src/auth/authStore.ts`, `src/auth/loginWithDeriv.ts`,
+  `src/auth/oauthCallback.ts`, `src/auth/earlyAuth.ts` (legacy URL
+  bridge only), `src/auth/authorizeSession.ts`.
 
 ### Charting
 - **@deriv/deriv-charts** for displaying market data and trade visualizations
@@ -82,6 +104,56 @@ Preferred communication style: Simple, everyday language.
 - `lz-string` / `pako` - Compression utilities
 
 ## Recent Changes
+
+### OAuth 2.0 PKCE migration (April 2026 — third pass)
+Replaced the mixed legacy OAuth + URL-token + cookie flow with a clean
+OAuth 2.0 Authorization Code + PKCE pipeline:
+
+1. **`src/auth/authStore.ts`** — new single source of truth. In-memory
+   state mirrored to `localStorage` under `deriv_auth_v2`; legacy keys
+   (`authToken`, `accountsList`, `clientAccounts`, `active_loginid`)
+   are write-through mirrors so the bot-skeleton, charts, and account
+   switcher keep working untouched.
+2. **`src/auth/pkce.ts`** — RFC 7636 helpers (S256 challenge,
+   base64url-unpadded, 64-byte verifier).
+3. **`src/auth/loginWithDeriv.ts`** — generates verifier + challenge,
+   stores the verifier and CSRF state in `sessionStorage`, redirects to
+   `https://auth.deriv.com/oauth2/auth`.
+4. **`src/auth/oauthCallback.ts`** — handles `?code=&state=` callback,
+   verifies state, POSTs to `/oauth2/token`, writes the result into
+   the authStore, cleans the URL.
+5. **`src/main.tsx`** — async bootstrap: hydrate authStore → handle
+   OAuth callback → migrate any legacy `?acct1=` URL → fire-and-forget
+   `authorizeSession` → render React.
+6. **Removed**: `V2GetActiveToken` legacy localStorage probe (now
+   delegates to authStore), `Cookies.get('logged_state')` checks (in
+   `app-store.ts`, `layout/index.tsx`, `CoreStoreProvider.tsx`,
+   `api-base.ts`), `URLUtils.getLoginInfoFromURL` in `AuthWrapper.tsx`,
+   `OAuth2Logout` in `useOauth2.ts`, the full TMB sessions/active flow
+   in `useTMB.ts` (replaced with a stable no-op stub), and
+   `handleOidcAuthFailure` in `auth-utils.ts`.
+7. **Login redirect loop fixed** — there is now exactly one place that
+   decides "is the user logged in?" (`authStore.isAuthenticated()`)
+   and exactly one place that triggers a redirect
+   (`useOauth2.retriggerOAuth2Login` → `loginWithDeriv`).
+
+**Required env vars** (all optional — sensible defaults applied):
+| Variable | Default | Purpose |
+|---|---|---|
+| `VITE_CLIENT_ID` | `32UpAZvxBqalqEFHVMTNS` | OAuth client id |
+| `VITE_APP_ID` | `111670` | WebSocket numeric app_id (legacy) |
+| `VITE_OAUTH_AUTHORIZE_URL` | `https://auth.deriv.com/oauth2/auth` | |
+| `VITE_OAUTH_TOKEN_URL` | `https://auth.deriv.com/oauth2/token` | |
+| `VITE_OAUTH_SCOPE` | `trade account_manage` | |
+| `VITE_REDIRECT_URI` | `window.location.origin + '/'` | Must be registered on the Deriv app dashboard |
+
+**Two operational caveats** the user must verify on Deriv's side:
+- The token endpoint must allow CORS from the SPA origin. If Deriv
+  has not enabled CORS on `/oauth2/token` for `client_id`
+  `32UpAZvxBqalqEFHVMTNS`, the browser-side token exchange will fail
+  and a backend proxy will be required.
+- The exact `redirect_uri` (production AND dev URLs) must be
+  registered on the Deriv app dashboard under that client_id.
 
 ### Free Bots Feature (December 2025)
 - Added Free Bots page with 12 pre-built trading bot templates

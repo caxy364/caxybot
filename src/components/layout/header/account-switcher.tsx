@@ -137,11 +137,12 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
 
     const switchAccount = async (loginId: number) => {
         if (loginId.toString() === activeAccount?.loginid) return;
-        const account_list = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
-        const token = account_list[loginId];
-        if (!token) return;
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('active_loginid', loginId.toString());
+        const { default: authStore } = await import('@/auth/authStore');
+        const target = authStore
+            .getState()
+            .accounts.find(a => a.loginid === loginId.toString());
+        if (!target) return;
+        authStore.setActiveLoginid(target.loginid);
         const account_type =
             loginId
                 .toString()

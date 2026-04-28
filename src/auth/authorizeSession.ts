@@ -1,17 +1,19 @@
 /**
- * Spec step 4 — verify the captured token by opening a single WebSocket
- * connection to Deriv, sending `{ authorize: <token> }`, and persisting
- * the response under `deriv_auth` as the canonical "logged in" signal.
+ * One-shot WebSocket authorize probe.
  *
- * This is intentionally a one-shot probe — the rest of the application
- * still opens its own long-lived WebSocket via `api_base.init()` for
- * trading, charts and account-list updates. This call exists ONLY so the
- * spec key `deriv_auth` is populated (step 5: session persistence check).
+ * Runs once at startup after the authStore has a token, opens a
+ * single WebSocket against `wss://ws.derivws.com/...?app_id=<legacy>`,
+ * sends `{ authorize: <token> }`, and persists the response under the
+ * `deriv_auth` key. The bot's main api_base manages its own long-lived
+ * connection — this is purely the "is the session usable?" probe.
  */
+import { AUTH_CONFIG } from './auth.config';
 
-const SPEC_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=111670';
 const SPEC_AUTH_KEY = 'deriv_auth';
 const TIMEOUT_MS = 8000;
+
+const buildSpecWsUrl = (): string =>
+    `wss://ws.derivws.com/websockets/v3?app_id=${encodeURIComponent(AUTH_CONFIG.legacyAppId)}`;
 
 export const authorizeSession = (token: string): Promise<void> =>
     new Promise(resolve => {
@@ -22,7 +24,7 @@ export const authorizeSession = (token: string): Promise<void> =>
 
         let socket: WebSocket;
         try {
-            socket = new WebSocket(SPEC_WS_URL);
+            socket = new WebSocket(buildSpecWsUrl());
         } catch (e) {
             // eslint-disable-next-line no-console
             console.error('[AUTH] Failed to open WebSocket', e);
@@ -43,8 +45,6 @@ export const authorizeSession = (token: string): Promise<void> =>
         };
 
         socket.onopen = () => {
-            // eslint-disable-next-line no-console
-            console.log('[AUTH] Authorizing...');
             try {
                 socket.send(JSON.stringify({ authorize: token }));
             } catch (e) {
@@ -67,8 +67,6 @@ export const authorizeSession = (token: string): Promise<void> =>
                         // eslint-disable-next-line no-console
                         console.error('[AUTH] Failed to persist deriv_auth', storageErr);
                     }
-                    // eslint-disable-next-line no-console
-                    console.log('[AUTH] Authorized', { loginid: data.authorize.loginid });
                 }
             } catch (e) {
                 // eslint-disable-next-line no-console
@@ -86,7 +84,6 @@ export const authorizeSession = (token: string): Promise<void> =>
 
         socket.onclose = () => finish();
 
-        // Safety timeout — never let this Promise hang forever.
         window.setTimeout(finish, TIMEOUT_MS);
     });
 

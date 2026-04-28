@@ -1,47 +1,26 @@
 /**
- * Utility functions for authentication-related operations
+ * Auth utility — thin wrapper around authStore.
+ *
+ * `handleOidcAuthFailure` from the legacy mixed-auth flow has been
+ * removed: the new OAuth 2.0 PKCE flow surfaces failures via the
+ * callback handler in `src/auth/oauthCallback.ts`, and there is no
+ * `logged_state` cookie to flip any more.
  */
-import Cookies from 'js-cookie';
+import authStore from '@/auth/authStore';
 
-/**
- * Clears authentication data from local storage and reloads the page
- */
 export const clearAuthData = (is_reload: boolean = true): void => {
-    localStorage.removeItem('accountsList');
-    localStorage.removeItem('clientAccounts');
-    localStorage.removeItem('callback_token');
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('active_loginid');
-    localStorage.removeItem('client.accounts');
-    localStorage.removeItem('client.country');
-    sessionStorage.removeItem('query_param_currency');
-    if (is_reload) {
-        location.reload();
+    authStore.clearAuth();
+    try {
+        localStorage.removeItem('client.accounts');
+        localStorage.removeItem('client_account_details');
+        localStorage.removeItem('client.country');
+        localStorage.removeItem('callback_token');
+        localStorage.removeItem('deriv_auth');
+        sessionStorage.removeItem('query_param_currency');
+    } catch {
+        /* noop */
     }
-};
-
-/**
- * Handles OIDC authentication failure by clearing auth data and showing logged out view
- * @param error - The error that occurred during OIDC authentication
- */
-export const handleOidcAuthFailure = (error: any): void => {
-    // Log the error
-    console.error('OIDC authentication failed:', error);
-
-    // Clear auth data
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('active_loginid');
-    localStorage.removeItem('clientAccounts');
-    localStorage.removeItem('accountsList');
-
-    // Set logged_state cookie to false
-    Cookies.set('logged_state', 'false', {
-        domain: window.location.hostname.split('.').slice(-2).join('.'),
-        expires: 30,
-        path: '/',
-        secure: true,
-    });
-
-    // Reload the page to show the logged out view
-    window.location.reload();
+    if (is_reload && typeof window !== 'undefined') {
+        window.location.reload();
+    }
 };

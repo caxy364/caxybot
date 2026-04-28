@@ -1,113 +1,59 @@
 /**
- * Early OAuth token capture.
+ * Legacy URL-token migration.
  *
- * Spec contract:
- *   1. Runs synchronously BEFORE React renders, BEFORE any auth-clearing
- *      logic, and BEFORE any API calls (called as the first statement in
- *      `src/main.tsx`).
- *   2. Reads acct1, token1, cur1, acct2, token2, cur2 ... from the
- *      current URL's search params.
- *   3. Stores accounts as an array of `{ account, token, currency }`
- *      under the spec keys `deriv_accounts`, `deriv_token`, and
- *      `deriv_account` in localStorage.
- *   4. Cleans the address bar with `history.replaceState({}, title, "/")`.
+ * The new login flow is OAuth 2.0 + PKCE (handled by oauthCallback.ts):
+ * the user comes back to `redirect_uri?code=...&state=...` and we
+ * exchange the code for an access token at /oauth2/token.
  *
- * Legacy compatibility: the existing in-app machinery (api-base, account
- * switcher, charts) still reads `authToken`, `active_loginid`,
- * `accountsList`, and `clientAccounts`. Those keys are written here
- * alongside the spec keys so the WebSocket authorize call performed by
- * `api_base.init()` continues to succeed without further refactoring.
+ * This module exists ONLY to bridge users who arrive via the OLDER
+ * Deriv redirect format `?acct1=&token1=&cur1=...` while the new app
+ * registration is being rolled out. It pulls those params out of the
+ * URL, populates the authStore once, and cleans the URL. After
+ * everyone is on the new client_id this function is dead code and the
+ * file can be deleted.
  */
+import authStore, { AuthAccount } from './authStore';
 
-export type DerivAccount = {
-    account: string;
-    token: string;
-    currency: string;
-};
-
-const SPEC_KEY_ACCOUNTS = 'deriv_accounts';
-const SPEC_KEY_TOKEN = 'deriv_token';
-const SPEC_KEY_ACCOUNT = 'deriv_account';
-
-const parseAccountsFromUrl = (search: string): DerivAccount[] => {
+const parseLegacyAccountsFromUrl = (search: string): AuthAccount[] => {
     const params = new URLSearchParams(search);
-    const accounts: DerivAccount[] = [];
+    const out: AuthAccount[] = [];
     let i = 1;
-    // eslint-disable-next-line no-constant-condition
     while (true) {
-        const account = params.get(`acct${i}`);
+        const loginid = params.get(`acct${i}`);
         const token = params.get(`token${i}`);
-        if (!account || !token) break;
-        const currency = params.get(`cur${i}`) ?? '';
-        accounts.push({ account, token, currency });
+        if (!loginid || !token) break;
+        out.push({ loginid, token, currency: params.get(`cur${i}`) ?? '' });
         i += 1;
     }
-    return accounts;
+    return out;
 };
 
-export type EarlyAuthResult = {
-    captured: boolean;
-    primary?: DerivAccount;
-    accounts?: DerivAccount[];
-};
+export const migrateLegacyTokensFromUrl = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    const accounts = parseLegacyAccountsFromUrl(window.location.search);
+    if (accounts.length === 0) return false;
 
-export const runEarlyAuth = (): EarlyAuthResult => {
-    if (typeof window === 'undefined') return { captured: false };
-
-    const accounts = parseAccountsFromUrl(window.location.search);
-    if (accounts.length === 0) return { captured: false };
-
-    // eslint-disable-next-line no-console
-    console.log('[AUTH] Tokens captured', { count: accounts.length });
-
-    const primary = accounts[0];
+    // Treat the first per-account token as the OAuth access token —
+    // it is what the WebSocket layer will use, and it lets the rest of
+    // the app see "logged in".
+    authStore.setSession({
+        accessToken: accounts[0].token,
+        accounts,
+        activeLoginid: accounts[0].loginid,
+    });
 
     try {
-        // Spec keys (the source of truth for the new auth contract).
-        localStorage.setItem(SPEC_KEY_ACCOUNTS, JSON.stringify(accounts));
-        localStorage.setItem(SPEC_KEY_TOKEN, primary.token);
-        localStorage.setItem(SPEC_KEY_ACCOUNT, primary.account);
-
-        // Legacy keys consumed by the rest of the app — written here so
-        // api-base, the account switcher, and the bot builder remain
-        // functional without changing their internals.
-        const accountsList: Record<string, string> = {};
-        const clientAccounts: Record<string, DerivAccount & { loginid: string }> = {};
-        for (const a of accounts) {
-            accountsList[a.account] = a.token;
-            clientAccounts[a.account] = { loginid: a.account, ...a };
-        }
-        localStorage.setItem('accountsList', JSON.stringify(accountsList));
-        localStorage.setItem('clientAccounts', JSON.stringify(clientAccounts));
-        localStorage.setItem('authToken', primary.token);
-        localStorage.setItem('active_loginid', primary.account);
-
-        // eslint-disable-next-line no-console
-        console.log('[AUTH] Stored successfully');
-    } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('[AUTH] Storage failed', e);
-        return { captured: true, primary, accounts };
+        const url = new URL(window.location.href);
+        ['acct', 'token', 'cur'].forEach(prefix => {
+            for (let i = 1; i <= accounts.length; i += 1) {
+                url.searchParams.delete(`${prefix}${i}`);
+            }
+        });
+        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+    } catch {
+        /* noop */
     }
-
-    // URL cleanup — must happen ONLY after the writes above succeed,
-    // otherwise a storage failure would lose the tokens entirely.
-    // Guard: do NOT clean if OAuth params are still present — clearing them
-    // before downstream consumers (AuthWrapper, api-base) finish reading the
-    // stored session can cause a race that wipes auth state.
-    try {
-        const hasOAuthParams =
-            window.location.search.includes('acct') || window.location.search.includes('token');
-
-        if (!hasOAuthParams) {
-            window.history.replaceState({}, document.title, '/');
-        }
-    } catch (e) {
-        // eslint-disable-next-line no-console
-        console.warn('[AUTH] URL clean failed', e);
-    }
-
-    return { captured: true, primary, accounts };
+    return true;
 };
 
-export default runEarlyAuth;
+export default migrateLegacyTokensFromUrl;

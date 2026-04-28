@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import Cookies from 'js-cookie';
 import { observer } from 'mobx-react-lite';
+import authStore from '@/auth/authStore';
 import { getDecimalPlaces, toMoment } from '@/components/shared';
 import { FORM_ERROR_MESSAGES } from '@/components/shared/constants/form-error-messages';
 import { initFormErrorMessages } from '@/components/shared/utils/validation/declarative-validation-rules';
@@ -45,13 +46,14 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
         [tmb_enabled_from_hook]
     );
 
-    const isLoggedOutCookie = Cookies.get('logged_state') === 'false' && !is_tmb_enabled;
-
+    // Legacy `logged_state` cookie removed — authStore is the single
+    // source of truth. If the store says "not authenticated" but the
+    // mobx client still thinks it's logged in, force-logout to recover.
     useEffect(() => {
-        if (isLoggedOutCookie && client?.is_logged_in) {
+        if (!authStore.isAuthenticated() && client?.is_logged_in) {
             oAuthLogout();
         }
-    }, [isLoggedOutCookie, oAuthLogout, client?.is_logged_in]);
+    }, [oAuthLogout, client?.is_logged_in]);
 
     const activeAccount = useMemo(
         () => accountList?.find(account => account.loginid === activeLoginid),
