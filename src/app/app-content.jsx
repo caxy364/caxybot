@@ -33,21 +33,15 @@ import 'react-toastify/dist/ReactToastify.css';
 import '../components/bot-notification/bot-notification.scss';
 
 const AppContent = observer(() => {
-    const [is_api_initialized, setIsApiInitialized] = React.useState(false);
-    const [is_loading, setIsLoading] = React.useState(true);
-    const [is_eu_error_loading, setIsEuErrorLoading] = React.useState(true);
+    // Default to NOT loading: the dashboard shell itself doesn't need any
+    // remote data to render, and individual sub-sections (chart, etc.) own
+    // their own loading states. The previous "block UI until WebSocket
+    // opens + active_symbols arrives" gate frequently never resolved in
+    // this environment, leaving users stuck on a spinner.
+    const [is_api_initialized, setIsApiInitialized] = React.useState(true);
+    const [is_loading, setIsLoading] = React.useState(false);
+    const [is_eu_error_loading, setIsEuErrorLoading] = React.useState(false);
     const [offline_timeout, setOfflineTimeout] = React.useState(null);
-
-    // Hard safety net: never let the spinner block the UI for more than 4s,
-    // regardless of WebSocket / API / store init success or failure.
-    useEffect(() => {
-        const id = setTimeout(() => {
-            setIsApiInitialized(true);
-            setIsLoading(false);
-            setIsEuErrorLoading(false);
-        }, 4000);
-        return () => clearTimeout(id);
-    }, []);
     const store = useStore();
     const { app, transactions, common, client } = store;
     const { showDigitalOptionsMaltainvestError } = app;

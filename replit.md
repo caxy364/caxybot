@@ -4,6 +4,30 @@
 
 Deriv Bot is a web-based automated trading platform that allows users to create trading bots without coding. The application uses a visual block-based programming interface (powered by Blockly) to let users design trading strategies. Users can build bots from scratch, use quick strategies, or import existing bot configurations. The platform supports both demo and real trading accounts through the Deriv trading API.
 
+## Replit Environment Notes (Apr 2026)
+
+- Workflow `Dev Server` runs `npm run start` (rsbuild dev) on port 5000.
+- `VITE_APP_ID` is set to `65555` (Deriv `PRODUCTION` legacy app id).
+  The custom app id `111670` is rejected with HTTP 403 from the
+  `*.replit.dev` origin during the WebSocket handshake — Deriv only
+  allows it from registered origins. `65555` is the universal
+  legacy app id and works from any origin.
+- `src/external/bot-skeleton/services/api/api-base.ts` and
+  `chart-api.js` use stable arrow-function `onsocketclose` handlers
+  plus an `is_initializing` re-entrancy guard so a server-side
+  WebSocket close can't trigger an infinite reconnect loop. Close
+  listeners are detached *before* `disconnect()` so the disconnect
+  itself doesn't fire a reconnect.
+- `src/app/app-content.jsx` defaults `is_api_initialized=true`,
+  `is_loading=false`, `is_eu_error_loading=false` so the dashboard
+  renders immediately without waiting for an `accountList` event
+  that never arrives for unauthenticated users.
+- `src/pages/chart/chart.tsx` waits for `chart_api.api` to exist
+  before rendering SmartChart (gated on `is_chart_api_ready`).
+- Known non-blocking warnings in dev: TrackJS missing token, LiveChat
+  domain not allowed, Blockly HMR null-`is_mobile` (rebuild required
+  after edits), MobX strict-mode warning on `BlocklyStore._has_saved_bots`.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

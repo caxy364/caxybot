@@ -71,51 +71,67 @@ class APIBase {
         this.current_auth_subscriptions = [];
     };
 
-    onsocketopen() {
+    // Arrow-functions so the listener references are stable across calls
+    // and removeEventListener actually removes them.
+    onsocketopen = () => {
         setConnectionStatus(CONNECTION_STATUS.OPENED);
-    }
+    };
 
-    onsocketclose() {
+    onsocketclose = () => {
         setConnectionStatus(CONNECTION_STATUS.CLOSED);
         this.reconnectIfNotConnected();
-    }
+    };
+
+    is_initializing = false;
 
     async init(force_create_connection = false) {
-        this.toggleRunButton(true);
+        // Re-entrancy guard. A server-side close fires onsocketclose ->
+        // reconnectIfNotConnected -> init(true) synchronously while a
+        // previous init() is still running, which previously caused an
+        // infinite reconnect loop.
+        if (this.is_initializing) return;
+        this.is_initializing = true;
+        try {
+            this.toggleRunButton(true);
 
-        if (this.api) {
-            this.unsubscribeAllSubscriptions();
-        }
-
-        if (!this.api || this.api?.connection.readyState !== 1 || force_create_connection) {
-            if (this.api?.connection) {
-                ApiHelpers.disposeInstance();
-                setConnectionStatus(CONNECTION_STATUS.CLOSED);
-                this.api.disconnect();
-                this.api.connection.removeEventListener('open', this.onsocketopen.bind(this));
-                this.api.connection.removeEventListener('close', this.onsocketclose.bind(this));
+            if (this.api) {
+                this.unsubscribeAllSubscriptions();
             }
 
-            this.api = generateDerivApiInstance();
-            this.api?.connection.addEventListener('open', this.onsocketopen.bind(this));
-            this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
+            if (!this.api || this.api?.connection.readyState !== 1 || force_create_connection) {
+                if (this.api?.connection) {
+                    ApiHelpers.disposeInstance();
+                    // Detach listeners BEFORE disconnect so the close event
+                    // emitted by disconnect() does not re-trigger reconnect.
+                    this.api.connection.removeEventListener('open', this.onsocketopen);
+                    this.api.connection.removeEventListener('close', this.onsocketclose);
+                    setConnectionStatus(CONNECTION_STATUS.CLOSED);
+                    this.api.disconnect();
+                }
+
+                this.api = generateDerivApiInstance();
+                this.api?.connection.addEventListener('open', this.onsocketopen);
+                this.api?.connection.addEventListener('close', this.onsocketclose);
+            }
+
+            if (!this.has_active_symbols && !V2GetActiveToken()) {
+                this.active_symbols_promise = this.getActiveSymbols();
+            }
+
+            this.initEventListeners();
+
+            if (this.time_interval) clearInterval(this.time_interval);
+            this.time_interval = null;
+
+            if (V2GetActiveToken()) {
+                setIsAuthorizing(true);
+                await this.authorizeAndSubscribe();
+            }
+
+            chart_api.init(force_create_connection);
+        } finally {
+            this.is_initializing = false;
         }
-
-        if (!this.has_active_symbols && !V2GetActiveToken()) {
-            this.active_symbols_promise = this.getActiveSymbols();
-        }
-
-        this.initEventListeners();
-
-        if (this.time_interval) clearInterval(this.time_interval);
-        this.time_interval = null;
-
-        if (V2GetActiveToken()) {
-            setIsAuthorizing(true);
-            await this.authorizeAndSubscribe();
-        }
-
-        chart_api.init(force_create_connection);
     }
 
     getConnectionStatus() {

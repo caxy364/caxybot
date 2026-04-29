@@ -46,5 +46,5 @@ publicDir = "dist"
 [userenv]
 
 [userenv.shared]
-VITE_APP_ID = "111670"
 VITE_OAUTH_URL = "https://oauth.deriv.com/oauth2/authorize"
+VITE_APP_ID = "65555"

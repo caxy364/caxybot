@@ -35,6 +35,8 @@ const Chart = observer(({ show_digits_stats }: { show_digits_stats: boolean }) =
     const { common, ui } = useStore();
     const { chart_store, run_panel, dashboard } = useStore();
     const [isSafari, setIsSafari] = useState(false);
+    const [is_chart_api_ready, setIsChartApiReady] = useState(!!chart_api?.api);
+    const [is_ws_open, setIsWsOpen] = useState(false);
 
     const {
         chart_type,
@@ -84,8 +86,45 @@ const Chart = observer(({ show_digits_stats }: { show_digits_stats: boolean }) =
 
         setIsSafari(isSafariBrowser());
 
+        // Ensure the chart's WebSocket exists before SmartChart fires
+        // requestAPI for trading_times. Without this, when api-base init
+        // happens before this component mounts, chart_api may already be
+        // initialized — but if it isn't (e.g. dev hot reload), SmartChart
+        // would call .send() on a null api and never resolve.
+        let cancelled = false;
+        let openHandler: (() => void) | null = null;
+        const ensureChartApi = async () => {
+            if (!chart_api.api) {
+                try {
+                    await chart_api.init();
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.warn('[Chart] chart_api.init failed', e);
+                }
+            }
+            if (cancelled) return;
+            setIsChartApiReady(!!chart_api.api);
+
+            const ws = chart_api.api?.connection;
+            if (!ws) return;
+            // SmartChart only triggers its fetch sequence when
+            // isConnectionOpened transitions to true, so wait for the
+            // socket to actually be OPEN before flipping the flag.
+            if (ws.readyState === 1) {
+                setIsWsOpen(true);
+            } else {
+                openHandler = () => setIsWsOpen(true);
+                ws.addEventListener('open', openHandler);
+            }
+        };
+        ensureChartApi();
+
         return () => {
-            chart_api.api.forgetAll('ticks');
+            cancelled = true;
+            if (openHandler && chart_api.api?.connection) {
+                chart_api.api.connection.removeEventListener('open', openHandler);
+            }
+            chart_api.api?.forgetAll?.('ticks');
         };
     }, []);
 
@@ -124,8 +163,11 @@ const Chart = observer(({ show_digits_stats }: { show_digits_stats: boolean }) =
         }
     };
 
-    if (!symbol) return null;
-    const is_connection_opened = !!chart_api?.api;
+    if (!symbol || !is_chart_api_ready) return null;
+    // SmartChart treats this as the "connection ready" flag. We still
+    // mount only after chart_api.api exists, but we keep the value true
+    // so SmartChart proceeds with its initial fetch sequence.
+    const is_connection_opened = is_ws_open || !!chart_api?.api;
     return (
         <div
             className={classNames('dashboard__chart-wrapper', {
