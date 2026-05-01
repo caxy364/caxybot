@@ -1,0 +1,184 @@
+OAuth 2.0 Authentication
+
+OAuth 2.0 lets users grant your app access without sharing their password. Your app redirects the user to a Deriv sign-in and consent page. After the user logs in and approves permissions, Deriv returns an authorization code to your app. You exchange this code for an access token, which you then use to authenticate API requests. Recommended for web-based applications onboarding end users.
+
+---
+
+## Before You Begin
+
+Ensure your redirect URL is correctly registered in the dashboard
+The redirect URL must use HTTPS
+Your app must handle redirects, read the authorization code, and exchange it for tokens
+You must have a registered OAuth 2.0 client with valid credentials: client_id, client_secret, and redirect_uri
+All redirect URLs (including subdirectories) must be whitelisted. URLs must match exactly.
+
+---
+
+## ⚠️ IMPORTANT — REDIRECT CONFIGURATION (CRITICAL)
+
+### 🔴 redirect URL (REGISTERED IN DASHBOARD)
+
+👉 MUST be explicitly whitelisted in Deriv Developers Dashboard
+👉 Example structure:
+
+```
+https://your-domain.com/callback
+```
+
+---
+
+### 🔵 redirect_uri (USED IN CODE)
+
+👉 MUST match EXACTLY what is registered above
+👉 This is what is passed in OAuth request
+
+---
+
+## 🚨 PLACEHOLDER FOR THIS PROJECT
+
+### client_id (App ID)
+
+```
+32UpAZvxBqalqEFHVMTNS
+```
+
+---
+
+### redirect_uri (WILL BE INSERTED LATER)
+
+```
+REDIRECT_URI = "INSERT_HERE_LATER"
+```
+
+---
+
+### redirect URL (DASHBOARD REGISTERED VALUE)
+
+```
+REGISTERED_REDIRECT_URL = "INSERT_HERE_LATER"
+```
+
+---
+
+## OAuth 2.0 Flow Steps
+
+Your app redirects the user to Deriv's OAuth 2.0 authorization page to sign in and review permissions
+The authorization server handles login and consent securely
+After login, Deriv redirects the user back to your app with an authorization code and state parameter
+Your app exchanges this code for tokens (with PKCE if used)
+The OAuth server returns the access token (and optional refresh token)
+Your app securely stores and uses the access token for WebSocket or REST API calls
+
+---
+
+## oauth-authentication.js
+
+```javascript id="oauth001"
+// OAuth 2.0 Authentication Flow (Authorization Code with PKCE)
+
+const CLIENT_ID = '32UpAZvxBqalqEFHVMTNS';
+const REDIRECT_URI = 'INSERT_REDIRECT_URI_HERE';
+
+// --- PKCE Helper Functions ---
+function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Step 1: Generate PKCE values and redirect user to authorization endpoint
+const codeVerifier = generateCodeVerifier();
+const codeChallenge = await generateCodeChallenge(codeVerifier);
+const state = crypto.randomUUID();
+
+sessionStorage.setItem('code_verifier', codeVerifier);
+sessionStorage.setItem('oauth_state', state);
+
+const authUrl = new URL('https://auth.deriv.com/oauth2/auth');
+authUrl.searchParams.set('response_type', 'code');
+authUrl.searchParams.set('client_id', CLIENT_ID);
+authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
+authUrl.searchParams.set('scope', 'trade account_manage');
+authUrl.searchParams.set('state', state);
+authUrl.searchParams.set('code_challenge', codeChallenge);
+authUrl.searchParams.set('code_challenge_method', 'S256');
+
+window.location.href = authUrl.toString();
+
+// Step 3: Handle the callback
+const urlParams = new URLSearchParams(window.location.search);
+const authorizationCode = urlParams.get('code');
+const returnedState = urlParams.get('state');
+
+const savedState = sessionStorage.getItem('oauth_state');
+if (returnedState !== savedState) {
+  throw new Error('State mismatch: possible CSRF attack');
+}
+
+// Step 4: Exchange the authorization code for tokens
+const savedVerifier = sessionStorage.getItem('code_verifier');
+const tokenResponse = await fetch('https://auth.deriv.com/oauth2/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({
+    grant_type: 'authorization_code',
+    client_id: CLIENT_ID,
+    code: authorizationCode,
+    redirect_uri: REDIRECT_URI,
+    code_verifier: savedVerifier
+  })
+});
+
+const tokenData = await tokenResponse.json();
+const accessToken = tokenData.access_token;
+console.log('Access token obtained, expires in', tokenData.expires_in, 'seconds');
+
+// Step 6: Use the access token for authenticated API calls
+const response = await fetch('https://api.derivws.com/trading/v1/options/accounts', {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Deriv-App-ID': CLIENT_ID,
+    'Content-Type': 'application/json'
+  }
+});
+
+const result = await response.json();
+console.log('Authenticated API call successful:', result);
+```
+
+---
+
+## 🔐 Security Best Practices
+
+Always validate the state parameter to prevent CSRF attacks
+Generate your code_challenge from a cryptographically secure random code_verifier
+Store tokens securely on the server. Never expose them in frontend code.
+Access tokens are short-lived (typically 3600 seconds) and must be refreshed
+The authorization code is single-use and short-lived
+
+---
+
+## 🧠 CRITICAL REMINDER
+
+* redirect URL = registered in Deriv dashboard (MUST MATCH EXACTLY)
+* redirect_uri = used in code request (MUST MATCH registered URL)
+* mismatch = authentication failure
+
+---
+
+## 🔗 SOURCE OF TRUTH
+
+Derived strictly from:
+
+* Deriv API OAuth 2.0 Authentication documentation
+* developers.deriv.com official authentication guidelines

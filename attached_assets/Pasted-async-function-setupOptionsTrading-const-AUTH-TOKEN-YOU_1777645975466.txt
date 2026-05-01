@@ -1,0 +1,72 @@
+async function setupOptionsTrading() {
+  const AUTH_TOKEN = 'YOUR_AUTHORIZATION_TOKEN';  // PAT or JWT token
+  const APP_ID = 'YOUR_APP_ID';                   // App ID from registered application
+  const API_BASE = 'https://api.derivws.com';
+  const accountId = 'YOUR_ACCOUNT_ID';            // Your demo or real account ID
+
+  try {
+    // Step 1: Get authenticated WebSocket URL (REST, requires authorization token)
+    const otpResponse = await fetch(
+      `${API_BASE}/trading/v1/options/accounts/${accountId}/otp`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${AUTH_TOKEN}`,
+          'Deriv-App-ID': APP_ID
+        }
+      }
+    );
+
+    if (!otpResponse.ok) throw new Error(`HTTP error! status: ${otpResponse.status}`);
+    const otpData = await otpResponse.json();
+    const wsUrl = otpData.data.url;
+    console.log('✓ Authenticated WebSocket URL obtained');
+
+    // Step 2: Connect to WebSocket using the authenticated URL
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('✓ WebSocket connected');
+
+      // Step 3: Start trading
+      // Subscribe to balance updates
+      ws.send(JSON.stringify({
+        balance: 1,
+        subscribe: 1,
+        req_id: 1
+      }));
+
+      // Subscribe to ticks
+      ws.send(JSON.stringify({
+        ticks: "1HZ100V",
+        subscribe: 1,
+        req_id: 2
+      }));
+    };
+
+    ws.onmessage = (msg) => {
+      const data = JSON.parse(msg.data);
+
+      if (data.msg_type === 'balance') {
+        console.log('Balance:', data.balance.balance, data.balance.currency);
+      }
+
+      if (data.msg_type === 'tick') {
+        console.log('Tick:', data.tick.quote);
+      }
+    };
+
+    return ws;
+
+  } catch (error) {
+    console.error('Setup failed:', error);
+    throw error;
+  }
+}
+
+// Run the setup
+setupOptionsTrading().then(ws => {
+  console.log('Trading setup complete. WebSocket ready for operations.');
+}).catch(err => {
+  console.error('Failed to setup trading:', err);
+});

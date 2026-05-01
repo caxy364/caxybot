@@ -1,0 +1,107 @@
+Market Data Workflow
+No Authentication Required
+
+You can access market data using the public WebSocket endpoint without authentication. Perfect for building chart applications or market monitors.
+
+---
+
+## WORKFLOW STEPS
+
+Connect to the public WebSocket endpoint (no auth needed)
+Request active_symbols to see available markets
+Subscribe to ticks for real-time price updates
+Optionally get ticks_history for historical data
+Use contracts_for to see available contract types
+Stream continues until forget or disconnect
+
+---
+
+## market-data.js
+
+```javascript id="market001"
+// Connect to the public WebSocket endpoint (no authentication required)
+const ws = new WebSocket('wss://ws.binaryws.com/websockets/v3');
+
+ws.onopen = () => {
+  // Get available symbols
+  ws.send(JSON.stringify({
+    active_symbols: "brief",
+    product_type: "basic",
+    req_id: 1
+  }));
+
+  // Subscribe to tick stream
+  ws.send(JSON.stringify({
+    ticks: "1HZ100V",
+    subscribe: 1,
+    req_id: 2
+  }));
+
+  // Get historical data
+  ws.send(JSON.stringify({
+    ticks_history: "1HZ100V",
+    count: 100,
+    end: "latest",
+    style: "ticks",
+    req_id: 3
+  }));
+};
+
+ws.onmessage = (msg) => {
+  const data = JSON.parse(msg.data);
+
+  if (data.msg_type === 'active_symbols') {
+    console.log('Available symbols:', data.active_symbols);
+  }
+
+  if (data.msg_type === 'tick') {
+    console.log('Current price:', data.tick.quote);
+  }
+
+  if (data.msg_type === 'history') {
+    console.log('Historical data:', data.history);
+  }
+};
+```
+
+---
+
+## 🔐 SYSTEM CLARIFICATION
+
+This WebSocket connection is:
+
+* Public endpoint (no authentication required)
+* Used only for market data
+* Independent of OAuth / JWT system
+* Independent of OTP authentication flow
+
+---
+
+## 📊 PURPOSE OF THIS MODULE
+
+This module is responsible for:
+
+* Real-time price streaming (ticks)
+* Market availability listing (active_symbols)
+* Historical price data (ticks_history)
+* Pre-trade market analysis
+* Chart visualization support
+
+---
+
+## 🚨 CRITICAL RULES
+
+* Do NOT use this endpoint for trading operations
+* Do NOT send buy/sell/proposal requests here
+* Do NOT attach authentication headers
+* Do NOT confuse with trading WebSocket endpoint
+* This is strictly read-only market data stream
+
+---
+
+## 🔗 ENDPOINT SOURCE
+
+Public Deriv WebSocket market data endpoint:
+wss://ws.binaryws.com/websockets/v3
+
+Derived from official Deriv API market data specifications

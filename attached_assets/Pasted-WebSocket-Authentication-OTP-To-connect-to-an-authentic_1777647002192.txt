@@ -1,0 +1,101 @@
+WebSocket Authentication (OTP)
+
+To connect to an authenticated WebSocket endpoint, you need to call the OTP REST endpoint using your authorization token (JWT). The response contains an authenticated WebSocket URL that you can connect to directly. The URL handles the authentication for you.
+
+---
+
+## WebSocket Endpoints:
+
+### Public
+
+No authentication required
+Use for market data and public information. No login needed.
+
+---
+
+### Demo
+
+Authenticated
+Use for demo/virtual account trading operations. The OTP response URL will point to this endpoint for demo accounts.
+
+---
+
+### Real
+
+Authenticated
+Use for live/real account trading. The OTP response URL will point to this endpoint for real accounts.
+
+---
+
+## websocket-otp-auth.js
+
+```javascript id="otpws001"
+// Step 1: Get authenticated WebSocket URL via REST (requires authorization token)
+
+const otpResponse = await fetch(
+  `https://api.derivws.com/trading/v1/options/accounts/${accountId}/otp`,
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_AUTHORIZATION_TOKEN',  // JWT from OAuth 2.0 flow
+      'Deriv-App-ID': '32UpAZvxBqalqEFHVMTNS'             // Registered NEW API App ID
+    }
+  }
+);
+
+const otpResult = await otpResponse.json();
+const wsUrl = otpResult.data.url;
+
+// The URL already includes the correct endpoint and authentication
+// Output example:
+// wss://api.derivws.com/trading/v1/options/ws/demo?otp=abc123xyz789
+
+
+// Step 2: Connect to WebSocket using the authenticated URL
+
+const ws = new WebSocket(wsUrl);
+
+ws.onopen = () => {
+  console.log('WebSocket authenticated and connected');
+  // Ready for trading operations
+};
+```
+
+---
+
+## 🔐 AUTHORIZATION RULE (STRICT)
+
+This REST call requires:
+
+* JWT token obtained via OAuth 2.0 authentication flow
+* Passed as Bearer token in Authorization header
+* Used ONLY for REST OTP request
+
+---
+
+## 🧠 SYSTEM FLOW (IMPORTANT)
+
+1. User authenticates via OAuth 2.0
+2. JWT access token is generated
+3. REST call is made to OTP endpoint
+4. WebSocket URL is returned
+5. WebSocket connection is established using wsUrl
+
+---
+
+## 🚨 CRITICAL RULES
+
+* Do NOT manually construct WebSocket URLs
+* Do NOT bypass OTP endpoint
+* Do NOT use PAT (Personal Access Token)
+* Do NOT hardcode wsUrl
+* Do NOT connect before OTP response is received
+
+---
+
+## 🔗 ENDPOINT SOURCE
+
+All behavior is based strictly on:
+
+* Deriv API WebSocket OTP authentication system
+* Official developers.deriv.com trading API documentation

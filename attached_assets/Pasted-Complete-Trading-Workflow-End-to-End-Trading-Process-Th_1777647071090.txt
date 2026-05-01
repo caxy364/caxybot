@@ -1,0 +1,136 @@
+Complete Trading Workflow
+End-to-End Trading Process
+
+This workflow shows how to authenticate, get market data, create a proposal, buy a contract, and monitor it.
+
+---
+
+## Workflow Steps
+
+Establish connection and authenticate
+Get active symbols using active_symbols
+Subscribe to tick stream for chosen symbol using ticks
+Get contract proposal using proposal (with subscribe)
+Monitor real-time price updates
+When ready, buy contract using buy
+Subscribe to contract updates using proposal_open_contract
+Monitor contract status in real-time
+Optionally sell early using sell
+Check portfolio using portfolio
+
+---
+
+## trading-workflow.js
+
+```javascript id="workflow001"
+// After authentication...
+
+// 1. Get active symbols
+ws.send(JSON.stringify({
+  active_symbols: "brief",
+  req_id: 3
+}));
+
+// 2. Subscribe to ticks
+ws.send(JSON.stringify({
+  ticks: "1HZ100V",
+  subscribe: 1,
+  req_id: 4
+}));
+
+// 3. Get price proposal
+ws.send(JSON.stringify({
+  proposal: 1,
+  amount: 10,
+  basis: "stake",
+  contract_type: "MULTDOWN",
+  currency: "USD",
+  duration_unit: "s",
+  multiplier: 10,
+  underlying_symbol: "1HZ100V",
+  subscribe: 1,
+  req_id: 5
+}));
+
+// 4. Buy the contract (when ready)
+// Use proposal ID from previous response
+ws.send(JSON.stringify({
+  buy: "PROPOSAL_ID_HERE",
+  price: 100,
+  req_id: 6
+}));
+
+// 5. Monitor contract status
+ws.send(JSON.stringify({
+  proposal_open_contract: 1,
+  contract_id: CONTRACT_ID,
+  subscribe: 1,
+  req_id: 7
+}));
+```
+
+---
+
+## 🔐 SYSTEM REQUIREMENT (IMPORTANT CONTEXT)
+
+This workflow assumes:
+
+1. User is authenticated via OAuth 2.0 (JWT access token)
+2. OTP REST endpoint has been called successfully
+3. WebSocket connection is established using returned wsUrl
+4. ws object is active and connected
+
+---
+
+## 🧠 EXECUTION ORDER (STRICT)
+
+This system MUST follow this sequence:
+
+1. OAuth login → JWT token generated
+2. REST OTP call → WebSocket URL generated
+3. WebSocket connection established
+4. active_symbols request
+5. ticks subscription
+6. proposal request
+7. buy execution
+8. contract monitoring
+
+---
+
+## 🚨 CRITICAL RULES
+
+* Do NOT send buy request without valid proposal ID
+* Do NOT monitor contract without contract_id
+* Do NOT skip ticks subscription before proposal
+* Do NOT execute trading before WebSocket connection is open
+* Do NOT bypass OAuth + OTP flow
+* Do NOT use PAT (Personal Access Token)
+
+---
+
+## 🔗 APP CONFIGURATION
+
+* App ID (Deriv App):
+
+```text
+32UpAZvxBqalqEFHVMTNS
+```
+
+* Authentication method:
+  OAuth 2.0 (JWT only)
+
+* WebSocket source:
+  OTP-generated wsUrl only
+
+---
+
+## 🎯 PURPOSE OF THIS MODULE
+
+This module handles:
+
+* Market data retrieval
+* Real-time tick streaming
+* Trade proposal generation
+* Contract execution
+* Live trade monitoring
+* Portfolio tracking

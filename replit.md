@@ -31,8 +31,11 @@ Preferred communication style: Simple, everyday language.
 - Support for multiple account types (demo, real, wallet-based)
 
 ### Authentication
-- OAuth2-based authentication flow with OIDC support
-- Token Management Backend (TMB) integration for enhanced session handling
+- **Legacy flow (active):** OAuth2-based authentication via `@deriv-com/auth-client` (OIDC) with TMB session handling
+- **New API flow (added, layered on top):** OAuth2 Authorization Code + PKCE via `https://auth.deriv.com/oauth2/auth`
+  - App ID: `32UpAZvxBqalqEFHVMTNS`
+  - PKCE helpers live in `src/services/deriv-api/auth.ts`
+  - Callback page (`src/pages/callback/callback-page.tsx`) auto-detects which flow triggered it (PKCE vs OIDC)
 - Multi-account support with account switching capabilities
 
 ### Charting
@@ -82,6 +85,21 @@ Preferred communication style: Simple, everyday language.
 - `lz-string` / `pako` - Compression utilities
 
 ## Recent Changes
+
+### New Deriv API Layer + Platform Cleanup (May 2026)
+- **Removed** Deriv Trader and Smart Trader from the platform switcher — Deriv Bot is now the only platform shown
+- **Added** `src/services/deriv-api/` — a self-contained new API service layer:
+  - `auth.ts` — OAuth2 PKCE flow (PKCE generation, auth URL builder, code→token exchange, callback handler)
+  - `api-client.ts` — REST API helper with mandatory `Authorization: Bearer` + `Deriv-App-ID` headers
+  - `otp.ts` — Calls `/trading/v1/options/accounts/{id}/otp` to get an authenticated WebSocket URL
+  - `websocket-manager.ts` — `DerivWebSocketManager` class (connect, balance, ticks, proposals, buy, monitor, reconnect) + `DerivPublicWebSocket` for unauthenticated market data
+  - `types.ts` — Shared constants (App ID, endpoint URLs) and TypeScript interfaces
+  - `index.ts` — Barrel export
+- **Added** `src/hooks/api/useDerivNewApi.ts` — React hooks:
+  - `usePublicWebSocket()` — Connects to public WS for market data (no auth needed)
+  - `useAuthenticatedWebSocket({ accessToken, accountId })` — Calls OTP endpoint then opens authenticated WS
+- **Updated** `src/pages/callback/callback-page.tsx` — detects PKCE vs OIDC callbacks; PKCE path exchanges the `code` for an access token and stores it in `localStorage.deriv_access_token`
+- Redirect URI is left configurable (`${window.location.origin}/callback`) — must be registered in the Deriv Developers Dashboard before using the new OAuth2 PKCE flow
 
 ### Free Bots Feature (December 2025)
 - Added Free Bots page with 12 pre-built trading bot templates

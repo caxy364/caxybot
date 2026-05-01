@@ -1,15 +1,14 @@
+import { useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
 import { crypto_currencies_display_order, fiat_currencies_display_order } from '@/components/shared';
 import { generateDerivApiInstance } from '@/external/bot-skeleton/services/api/appId';
 import { observer as globalObserver } from '@/external/bot-skeleton/utils/observer';
 import useTMB from '@/hooks/useTMB';
+import { handleDerivCallback } from '@/services/deriv-api/auth';
 import { clearAuthData } from '@/utils/auth-utils';
 import { Callback } from '@deriv-com/auth-client';
-import { Button } from '@deriv-com/ui';
+import { Button, Text } from '@deriv-com/ui';
 
-/**
- * Gets the selected currency or falls back to appropriate defaults
- */
 const getSelectedCurrency = (
     tokens: Record<string, string>,
     clientAccounts: Record<string, any>,
@@ -23,14 +22,71 @@ const getSelectedCurrency = (
         '';
     const firstAccountKey = tokens.acct1;
     const firstAccountCurrency = clientAccounts[firstAccountKey]?.currency;
-
     const validCurrencies = [...fiat_currencies_display_order, ...crypto_currencies_display_order];
     if (tokens.acct1?.startsWith('VR') || currency === 'demo') return 'demo';
     if (currency && validCurrencies.includes(currency.toUpperCase())) return currency;
     return firstAccountCurrency || 'USD';
 };
 
+const PkceCallbackHandler = () => {
+    const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
+    const [errorMessage, setErrorMessage] = useState('');
+
+    useEffect(() => {
+        const redirectUri = `${window.location.origin}/callback`;
+
+        handleDerivCallback(redirectUri).then(result => {
+            if (result.success && result.accessToken) {
+                localStorage.setItem('deriv_access_token', result.accessToken);
+                setStatus('success');
+                setTimeout(() => {
+                    window.location.replace(window.location.origin);
+                }, 1500);
+            } else {
+                setStatus('error');
+                setErrorMessage(result.error ?? 'Unknown error during authentication');
+            }
+        });
+    }, []);
+
+    if (status === 'processing') {
+        return (
+            <div className='callback-processing'>
+                <Text>Completing sign-in, please wait…</Text>
+            </div>
+        );
+    }
+
+    if (status === 'success') {
+        return (
+            <div className='callback-success'>
+                <Text>Sign-in successful. Redirecting to Deriv Bot…</Text>
+            </div>
+        );
+    }
+
+    return (
+        <div className='callback-error'>
+            <Text>Authentication failed: {errorMessage}</Text>
+            <Button
+                className='callback-return-button'
+                onClick={() => {
+                    window.location.href = '/';
+                }}
+            >
+                Return to Bot
+            </Button>
+        </div>
+    );
+};
+
 const CallbackPage = () => {
+    const isPkceFlow = Boolean(sessionStorage.getItem('deriv_pkce_state'));
+
+    if (isPkceFlow) {
+        return <PkceCallbackHandler />;
+    }
+
     return (
         <Callback
             onSignInSuccess={async (tokens: Record<string, string>, rawState: unknown) => {
@@ -67,19 +123,13 @@ const CallbackPage = () => {
                     const { authorize, error } = await api.authorize(tokens.token1);
                     api.disconnect();
                     if (error) {
-                        // Check if the error is due to an invalid token
                         if (error.code === 'InvalidToken') {
-                            // Set is_token_set to true to prevent the app from getting stuck in loading state
                             is_token_set = true;
-
-                            // Only emit the InvalidToken event if logged_state is true
                             const { is_tmb_enabled = false } = useTMB();
                             if (Cookies.get('logged_state') === 'true' && !is_tmb_enabled) {
-                                // Emit an event that can be caught by the application to retrigger OIDC authentication
                                 globalObserver.emit('InvalidToken', { error });
                             }
                             if (Cookies.get('logged_state') === 'false') {
-                                // If the user is not logged out, we need to clear the local storage
                                 clearAuthData();
                             }
                         }
@@ -99,9 +149,8 @@ const CallbackPage = () => {
                     localStorage.setItem('authToken', tokens.token1);
                     localStorage.setItem('active_loginid', tokens.acct1);
                 }
-                // Determine the appropriate currency to use
-                const selected_currency = getSelectedCurrency(tokens, clientAccounts, state);
 
+                const selected_currency = getSelectedCurrency(tokens, clientAccounts, state);
                 window.location.replace(window.location.origin + `bot/?account=${selected_currency}`);
             }}
             renderReturnButton={() => {

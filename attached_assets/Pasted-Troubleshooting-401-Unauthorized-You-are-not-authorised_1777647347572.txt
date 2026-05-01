@@ -1,0 +1,183 @@
+Troubleshooting
+
+---
+
+## 401 Unauthorized
+
+"You are not authorised to access this resource"
+
+### Common causes:
+
+* Missing Authorization: Bearer <YOUR_AUTHORIZATION_TOKEN> header in REST requests
+* Using an expired or invalid authorization token
+* Using a legacy App ID instead of a new App ID registered on developers.deriv.com
+* Mismatched application type, such as using a PAT token with an OAuth-type application, or vice versa
+
+### Solution:
+
+Ensure REST requests include:
+
+```text id="authhdr001"
+Authorization: Bearer YOUR_AUTHORIZATION_TOKEN
+Deriv-App-ID: 32UpAZvxBqalqEFHVMTNS
+```
+
+Use ONLY a new App ID registered on developers.deriv.com.
+
+Ensure token type matches application type (OAuth 2.0 JWT only for this project).
+
+---
+
+## 403 Forbidden
+
+"Insufficient permissions"
+
+### Common causes:
+
+* Authorization token does not have required scopes for endpoint
+* Token created without trade or account_manage scope
+
+### Solution:
+
+Regenerate token with required scopes:
+
+* trade
+* account_manage
+
+At least one scope must be defined when creating a token.
+
+---
+
+## Invalid App ID
+
+"App ID not recognised"
+
+### Common causes:
+
+* Using legacy App ID with new API
+* Using App ID not registered on developers.deriv.com
+* Using App ID with wrong type
+
+### Solution:
+
+Use ONLY:
+
+```text id="appid001"
+32UpAZvxBqalqEFHVMTNS
+```
+
+Ensure application is registered as OAuth 2.0 type in Deriv Developers Dashboard.
+
+---
+
+## Expired Access Token
+
+"Token no longer valid"
+
+### Common causes:
+
+* OAuth 2.0 access tokens expire automatically (~3600 seconds / 1 hour)
+* PAT tokens revoked manually from dashboard
+
+### Solution:
+
+For OAuth apps:
+
+* Implement refresh token logic
+
+For this system:
+
+* Do NOT store tokens in frontend
+* Do NOT expose tokens in URLs
+* Re-authenticate when expired
+
+---
+
+## OAuth Redirect Failure
+
+"Consent flow fails or app does not redirect user"
+
+### Common causes:
+
+* Redirect URL not whitelisted in dashboard
+* Subdirectories not registered
+* Mismatch between OAuth request redirect_uri and registered URL
+
+### Solution:
+
+Ensure ALL redirect URLs (including subdirectories) are registered in:
+
+developers.deriv.com application settings
+
+URLs must match EXACTLY.
+
+---
+
+# 🧠 COMMON PATTERNS
+
+---
+
+## Subscription Management
+
+How to manage WebSocket subscriptions effectively:
+
+* Always store subscription IDs
+* Use forget to unsubscribe
+* Use forget_all to clear all
+* Clean up subscriptions before disconnect
+
+---
+
+## Error Handling
+
+Best practices:
+
+* Always check for error field in response
+* Implement exponential backoff for retries
+* Log errors with full request context
+* Handle network disconnections gracefully
+
+---
+
+## Request IDs
+
+How to track requests and responses:
+
+* Use unique req_id for each request
+* Match responses using req_id
+* Required for concurrent requests
+* Essential for debugging trading logic
+
+---
+
+## Connection Lifecycle
+
+Managing WebSocket state:
+
+* Handle onopen, onclose, onerror
+* Implement auto-reconnect logic
+* Re-authenticate after reconnect
+* Restore subscriptions after reconnection
+
+---
+
+# 🔐 SYSTEM CONTEXT (IMPORTANT)
+
+This troubleshooting applies to:
+
+* OAuth 2.0 JWT authentication system
+* New Deriv API architecture
+* OTP-based WebSocket authentication
+* Real-time trading WebSocket connections
+
+Legacy API patterns are NOT supported.
+
+---
+
+# 🔗 SOURCE OF TRUTH
+
+Based strictly on:
+
+* Deriv API authentication documentation
+* WebSocket trading system specifications
+* developers.deriv.com official API guidelines

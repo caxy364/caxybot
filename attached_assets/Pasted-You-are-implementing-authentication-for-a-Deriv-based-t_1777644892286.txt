@@ -1,0 +1,165 @@
+You are implementing authentication for a Deriv-based trading web application using the NEW Deriv API (not legacy).
+
+Follow these exact requirements strictly based on official Deriv API documentation.
+
+---
+
+### SOURCE OF TRUTH
+
+All implementation must align with:
+Deriv API Overview and Authentication documentation from developers.deriv.com
+
+Do NOT invent, assume, or use legacy API behavior.
+
+---
+
+### APPLICATION DETAILS
+
+* API Type: OAuth 2.0
+* client_id (App ID): 32UpAZvxBqalqEFHVMTNS
+* redirect_uri: (leave configurable, do NOT hardcode yet)
+
+---
+
+### AUTHENTICATION MODEL
+
+Use OAuth 2.0 Authorization Code Flow with PKCE.
+
+DO NOT use:
+
+* Legacy token-in-URL methods
+* Direct API token authentication in frontend
+* Old WebSocket authentication methods
+
+---
+
+### STEP 1: GENERATE PKCE PARAMETERS
+
+Generate:
+
+* code_verifier (secure random string)
+* code_challenge (SHA256 hash of verifier, base64url encoded)
+* state (CSRF protection)
+
+---
+
+### STEP 2: BUILD AUTHORIZATION URL
+
+Use this exact base endpoint:
+
+https://auth.deriv.com/oauth2/auth
+
+Include these query parameters:
+
+* response_type=code
+* client_id=32UpAZvxBqalqEFHVMTNS
+* redirect_uri={DYNAMIC}
+* scope=read,trade
+* state={GENERATED}
+* code_challenge={GENERATED}
+* code_challenge_method=S256
+
+Do NOT use oauth.deriv.com
+Do NOT omit PKCE fields
+
+---
+
+### STEP 3: REDIRECT USER
+
+Redirect user to the constructed authorization URL.
+
+---
+
+### STEP 4: HANDLE CALLBACK
+
+On redirect_uri page:
+
+Extract:
+
+* code
+* state
+
+Validate:
+
+* state must match original value
+
+If no "code" is present:
+→ treat as authentication failure
+
+---
+
+### STEP 5: BACKEND TOKEN EXCHANGE
+
+Create a backend endpoint to exchange authorization code for access token.
+
+POST request to:
+
+https://auth.deriv.com/oauth2/token
+
+Include:
+
+* grant_type=authorization_code
+* client_id=32UpAZvxBqalqEFHVMTNS
+* code={RECEIVED_CODE}
+* code_verifier={ORIGINAL_VERIFIER}
+* redirect_uri={SAME_AS_INITIAL}
+
+Store access_token securely on server side.
+
+DO NOT expose tokens in frontend or URL.
+
+---
+
+### STEP 6: PREPARE FOR API USAGE
+
+All REST API calls must include:
+
+Headers:
+
+* Authorization: Bearer {access_token}
+* Deriv-App-ID: 32UpAZvxBqalqEFHVMTNS
+
+---
+
+### STEP 7: NEXT PHASE (DO NOT IMPLEMENT YET)
+
+Later, this token will be used to:
+
+* Request OTP via REST endpoint
+* Establish authenticated WebSocket connection
+
+Do not implement WebSocket yet in this phase.
+
+---
+
+### STRICT RULES
+
+* Do NOT use legacy API endpoints
+* Do NOT pass tokens in URL
+* Do NOT skip PKCE
+* Do NOT hardcode redirect URI
+* Do NOT implement frontend-only authentication
+
+---
+
+### GOAL
+
+Produce:
+
+* Clean OAuth login flow
+* Backend token exchange endpoint
+* Secure token handling
+
+---
+
+### OUTPUT EXPECTATION
+
+Provide:
+
+* Frontend auth URL generator
+* Backend Express endpoint for token exchange
+* Callback handler logic
+
+---
+
+This implementation must strictly follow Deriv’s official API structure. No assumptions, no shortcuts.

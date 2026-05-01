@@ -1,0 +1,87 @@
+Configure REST API request headers for all Deriv API calls in the application.
+
+This configuration must follow the official Deriv API specification for authentication and request handling.
+
+---
+
+## 🔐 REQUIRED HEADERS (MANDATORY FOR ALL REST REQUESTS)
+
+Every REST API request MUST include the following headers exactly:
+
+```javascript
+// Required headers for ALL REST API calls
+headers: {
+  'Authorization': 'Bearer YOUR_AUTHORIZATION_TOKEN',  // Authorization token (PAT or JWT from OAuth 2.0 flow)
+  'Deriv-App-ID': '32UpAZvxBqalqEFHVMTNS',            // Registered application App ID (NEW API)
+  'Content-Type': 'application/json'
+}
+```
+
+---
+
+## 🧾 AUTHORIZATION TOKEN DEFINITION (DO NOT CHANGE)
+
+"Authorization token" refers strictly to:
+
+* JWT token obtained via OAuth 2.0 authentication flow
+
+This token MUST be:
+
+* Passed as a Bearer token in the Authorization header for ALL REST API calls
+* Used to authenticate requests to Deriv REST endpoints
+* Used later to obtain an authenticated WebSocket URL via the OTP endpoint
+
+DO NOT replace or modify this definition.
+
+---
+
+## 🚨 CRITICAL RULES
+
+* Do NOT use legacy API authentication methods
+* Do NOT omit Deriv-App-ID header
+* Do NOT pass tokens via URL parameters
+* Do NOT hardcode or expose tokens in frontend code
+* Do NOT bypass OAuth 2.0 authentication flow
+
+---
+
+## 🧠 SYSTEM BEHAVIOR REQUIREMENT
+
+All REST API modules in the application must:
+
+1. Automatically attach Authorization header (Bearer token)
+2. Automatically attach Deriv-App-ID header
+3. Ensure Content-Type is always application/json
+
+---
+
+## 🔗 SOURCE OF TRUTH
+
+This implementation is based strictly on:
+
+* Deriv API Overview documentation
+* Authentication section (OAuth 2.0 + PAT handling)
+* REST API requirements for Options trading platform
+
+Reference: developers.deriv.com (official API documentation)
+
+---
+
+## 🧩 INTEGRATION NOTE
+
+This header configuration will be used by:
+
+* OAuth token exchange requests
+* Account management endpoints
+* OTP generation endpoint (for WebSocket authentication)
+* Any future REST API communication layer
+
+---
+
+## 🎯 GOAL
+
+Ensure all REST API requests are:
+
+* Authenticated
+* Standardized
+* Compatible with Deriv NEW API system
