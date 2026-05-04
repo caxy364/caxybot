@@ -20,7 +20,6 @@ import { AppLogo } from '../app-logo';
 import AccountsInfoLoader from './account-info-loader';
 import AccountSwitcher from './account-switcher';
 import MenuItems from './menu-items';
-import MobileMenu from './mobile-menu';
 import PlatformSwitcher from './platform-switcher';
 import './header.scss';
 
@@ -214,7 +213,6 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
         >
             <Wrapper variant='left'>
                 <AppLogo />
-                <MobileMenu />
                 {isDesktop && <MenuItems />}
             </Wrapper>
             <Wrapper variant='right'>

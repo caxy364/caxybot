@@ -38,7 +38,7 @@
     // Brand primary colors
     --brand-white: #{constants.$color-white};
     --brand-dark-grey: #{constants.$color-black};
-    --brand-red-coral: #{constants.$color-red};
+    --brand-red-coral: #{constants.$color-green-3};
     --brand-orange: #{constants.$color-orange};
 
     // Brand secondary colors
@@ -102,11 +102,11 @@
         --button-primary-default: var(--brand-red-coral);
         --button-secondary-default: #{constants.$color-grey-1};
         --button-tertiary-default: transparent;
-        --button-primary-light-default: #{constants.$alpha-color-red-2};
-        --button-primary-hover: #{constants.$color-red-5};
+        --button-primary-light-default: #{constants.$alpha-color-green-4};
+        --button-primary-hover: #{constants.$color-green-4};
         --button-secondary-hover: #{constants.$alpha-color-black-3};
-        --button-tertiary-hover: #{constants.$alpha-color-red-1};
-        --button-primary-light-hover: #{constants.$alpha-color-red-3};
+        --button-tertiary-hover: #{constants.$alpha-color-green-3};
+        --button-primary-light-hover: #{constants.$alpha-color-green-5};
         --button-toggle-primary: #{constants.$color-blue-3};
         --button-toggle-secondary: #{constants.$color-grey-5};
         --button-toggle-alternate: #{constants.$color-white};
@@ -246,11 +246,11 @@
         --button-primary-default: var(--brand-red-coral);
         --button-secondary-default: #{constants.$color-grey-7};
         --button-tertiary-default: transparent;
-        --button-primary-light-default: #{constants.$alpha-color-red-2};
-        --button-primary-hover: #{constants.$color-red-5};
+        --button-primary-light-default: #{constants.$alpha-color-green-4};
+        --button-primary-hover: #{constants.$color-green-4};
         --button-secondary-hover: #{constants.$alpha-color-white-3};
-        --button-tertiary-hover: #{constants.$alpha-color-red-1};
-        --button-primary-light-hover: #{constants.$alpha-color-red-3};
+        --button-tertiary-hover: #{constants.$alpha-color-green-3};
+        --button-primary-light-hover: #{constants.$alpha-color-green-5};
         --button-toggle-primary: #{constants.$color-blue-3};
         --button-toggle-secondary: #{constants.$color-black-8};
         --button-toggle-alternate: #{constants.$color-black-8};
